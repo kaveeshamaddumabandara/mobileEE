@@ -1,22 +1,97 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# CareConnect Mobile App
 
-# Getting Started
+React Native mobile application for caregivers and care receivers.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Features
 
-## Step 1: Start Metro
+### Common Features
+- Welcome screen with role selection
+- Email/password authentication
+- Role-based registration (Caregiver/Care Receiver)
+- Forgot password functionality
+- Profile management
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+### Caregiver Portal
+- Dashboard with statistics
+- Availability toggle
+- Profile management (skills, experience, hourly rate)
+- View and manage requests
+- Payment tracking
+- Rating and reviews
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+### Care Receiver Portal
+- Dashboard with available caregivers
+- Browse caregiver profiles
+- Request caregiver services
+- Manage appointments
+- Payment history
+- Emergency contact management
 
-```sh
-# Using npm
-npm start
+## Tech Stack
+- React Native CLI
+- TypeScript
+- React Navigation (Native Stack & Bottom Tabs)
+- Axios for API calls
+- AsyncStorage for local data persistence
+- React Context API for state management
 
-# OR using Yarn
-yarn start
+## Prerequisites
+- Node.js (v16 or higher)
+- Xcode (for iOS development)
+- CocoaPods
+- React Native CLI
+
+## Installation
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Install iOS dependencies:**
+   ```bash
+   cd ios && pod install && cd ..
+   ```
+
+## Running the App
+
+### iOS
+```bash
+npx react-native run-ios
 ```
+
+Or open `ios/CareConnectMobile.xcworkspace` in Xcode and run.
+
+To run on specific simulator:
+```bash
+npx react-native run-ios --simulator="iPhone 16"
+```
+
+## Backend Configuration
+
+Update the API base URL in `src/services/api.ts`:
+
+```typescript
+const API_BASE_URL = 'http://localhost:5000/api';
+```
+
+For iOS simulator use `localhost` or `127.0.0.1`
+
+## Project Structure
+
+```
+src/
+├── context/          # Authentication context
+├── navigation/       # Navigation configuration
+├── screens/          # All screen components
+│   ├── common/      # Auth screens
+│   ├── caregiver/   # Caregiver portal
+│   └── carereceiver/# Care receiver portal
+├── services/         # API service layer
+├── types/           # TypeScript definitions
+└── utils/           # Utility functions
+```
+
 
 ## Step 2: Build and run your app
 
