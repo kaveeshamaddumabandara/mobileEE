@@ -61,10 +61,7 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
         );
         break;
       case 'contact':
-        Alert.alert(
-          'Contact',
-          'Email: support@careconnect.com\nPhone: +94 11 234 5678',
-        );
+        navigation.navigate('ContactUs');
         break;
       case 'help':
         Alert.alert('Help', 'For assistance, please contact our support team.');
@@ -106,9 +103,11 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
               )}
             </View>
             <Text style={styles.menuUserName}>
-              {user?.name || 'Caregiver'}
+              {user?.name || 'User'}
             </Text>
-            <Text style={styles.menuUserRole}>Caregiver</Text>
+            <Text style={styles.menuUserRole}>
+              {user?.role === 'caregiver' ? 'Caregiver' : 'Care Receiver'}
+            </Text>
           </View>
 
           <ScrollView
@@ -119,7 +118,7 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
             style={styles.menuItem}
             onPress={() => handleMenuOption('dashboard')}>
             <View style={styles.iconContainer}>
-              <Icon name="home" size={20} color="#8b5cf6" />
+              <Icon name="home" size={20} color={user?.role === 'caregiver' ? '#8b5cf6' : '#2563eb'} />
             </View>
             <Text style={styles.menuItemText}>Dashboard</Text>
             <Icon name="chevron-right" size={16} color="#9ca3af" />
@@ -129,7 +128,7 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
             style={styles.menuItem}
             onPress={() => handleMenuOption('profile')}>
             <View style={styles.iconContainer}>
-              <Icon name="user" size={20} color="#8b5cf6" />
+              <Icon name="user" size={20} color={user?.role === 'caregiver' ? '#8b5cf6' : '#2563eb'} />
             </View>
             <Text style={styles.menuItemText}>My Profile</Text>
             <Icon name="chevron-right" size={16} color="#9ca3af" />
@@ -139,27 +138,31 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
             style={styles.menuItem}
             onPress={() => handleMenuOption('bookings')}>
             <View style={styles.iconContainer}>
-              <Icon name="calendar" size={20} color="#8b5cf6" />
+              <Icon name="calendar" size={20} color={user?.role === 'caregiver' ? '#8b5cf6' : '#2563eb'} />
             </View>
-            <Text style={styles.menuItemText}>My Bookings</Text>
+            <Text style={styles.menuItemText}>
+              {user?.role === 'caregiver' ? 'My Bookings' : 'Find Caregivers'}
+            </Text>
             <Icon name="chevron-right" size={16} color="#9ca3af" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => handleMenuOption('careDocumentation')}>
-            <View style={styles.iconContainer}>
-              <Icon name="file-text" size={20} color="#8b5cf6" />
-            </View>
-            <Text style={styles.menuItemText}>Care Documentation</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
+          {user?.role === 'caregiver' && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleMenuOption('careDocumentation')}>
+              <View style={styles.iconContainer}>
+                <Icon name="file-text" size={20} color="#8b5cf6" />
+              </View>
+              <Text style={styles.menuItemText}>Care Documentation</Text>
+              <Icon name="chevron-right" size={16} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => handleMenuOption('payments')}>
             <View style={styles.iconContainer}>
-              <Icon name="credit-card" size={20} color="#8b5cf6" />
+              <Icon name="credit-card" size={20} color={user?.role === 'caregiver' ? '#8b5cf6' : '#2563eb'} />
             </View>
             <Text style={styles.menuItemText}>Payments</Text>
             <Icon name="chevron-right" size={16} color="#9ca3af" />

@@ -145,7 +145,9 @@ const CaregiverProfileScreen: React.FC = () => {
           console.log('Upload result:', uploadResult);
           
           if (uploadResult.success && uploadResult.data?.url) {
-            setProfileImage(uploadResult.data.url);
+            const imageUrl = uploadResult.data.url;
+            console.log('Setting profile image URL:', imageUrl);
+            setProfileImage(imageUrl);
             Alert.alert('Success', 'Image uploaded! Click Save to update your profile.');
           } else {
             Alert.alert('Error', uploadResult.message || 'Failed to upload image');
@@ -189,8 +191,8 @@ const CaregiverProfileScreen: React.FC = () => {
         certificationsText: certifications,
       };
 
-      // Include profile image if it was changed and uploaded
-      if (profileImage && profileImage !== user?.profileImage) {
+      // Include profile image if it exists
+      if (profileImage) {
         // Check if it's already a server URL (starts with http)
         if (profileImage.startsWith('http')) {
           updateData.profileImage = profileImage;
@@ -202,11 +204,19 @@ const CaregiverProfileScreen: React.FC = () => {
       }
 
       const updatedUser = await ApiService.updateCaregiverProfile(updateData);
-      updateUser(updatedUser);
+      
+      // Update user context with new profile image
+      if (profileImage) {
+        updateUser({...updatedUser, profileImage: profileImage});
+      } else {
+        updateUser(updatedUser);
+      }
+      
       setIsEditing(false);
       Alert.alert('Success', 'Profile updated successfully');
-      // Reload profile to get updated data
-      await loadProfile();
+      
+      // Keep the current profileImage in state instead of reloading
+      // This ensures the uploaded image stays visible
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to update profile');
     } finally {
@@ -672,7 +682,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderRadius: 6,
     borderWidth: 1.5,
     borderColor: '#8b5cf6',

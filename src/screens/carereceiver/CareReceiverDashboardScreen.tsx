@@ -7,183 +7,551 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  FlatList,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
 } from 'react-native';
+import {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {CareReceiverTabParamList} from '../../navigation/types';
 import {useAuth} from '../../context/AuthContext';
 import ApiService from '../../services/api';
-import {CareReceiver, Caregiver} from '../../types';
+import Icon from 'react-native-vector-icons/Feather';
+import SideMenu from '../../components/SideMenu';
 
-const CareReceiverDashboardScreen: React.FC = () => {
+type CareReceiverDashboardScreenProps = {
+  navigation: NativeStackNavigationProp<CareReceiverTabParamList, 'Dashboard'>;
+};
+
+const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = ({
+  navigation,
+}) => {
   const {user} = useAuth();
-  const [profile, setProfile] = useState<CareReceiver | null>(null);
-  const [availableCaregivers, setAvailableCaregivers] = useState<Caregiver[]>(
-    [],
-  );
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Dashboard state
+  const [dashboardStats, setDashboardStats] = useState({
+    monthlyAppointments: 0,
+    assignedCaregivers: 0,
+    monthlyHours: 0,
+    satisfactionRate: 0,
+  });
+  
+  const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
+  const [weeklyActivity, setWeeklyActivity] = useState<any[]>([]);
+  const [serviceDistribution, setServiceDistribution] = useState<any[]>([]);
+  const [appointmentPage, setAppointmentPage] = useState(0);
+  
+  const ITEMS_PER_PAGE = 3;
 
   useEffect(() => {
-    loadDashboardData();
+    fetchDashboardData();
   }, []);
 
-  const loadDashboardData = async () => {
-    setLoading(true);
+  const fetchDashboardData = async () => {
     try {
-      const [profileData, caregiversData, statsData] = await Promise.all([
-        ApiService.getProfile(),
-        ApiService.getCaregivers(),
-        ApiService.getDashboardStats(),
-      ]);
-      setProfile(profileData as CareReceiver);
-      setAvailableCaregivers(
-        caregiversData.filter(cg => cg.availability).slice(0, 5),
-      );
-      setStats(statsData);
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
+      setLoading(true);
+      
+      console.log('Fetching dashboard data...');
+      console.log('User:', user);
+      
+      // Use new dedicated dashboard endpoint
+      const dashboardData = await ApiService.getCareReceiverDashboard();
+      console.log('Dashboard Data received:', dashboardData);
+      
+      if (dashboardData) {
+        // Set stats
+        setDashboardStats(dashboardData.stats);
+        console.log('Stats set:', dashboardData.stats);
+        
+        // Set weekly activity
+        setWeeklyActivity(dashboardData.weeklyActivity || []);
+        console.log('Weekly activity set:', dashboardData.weeklyActivity?.length);
+        
+        // Set service distribution
+        setServiceDistribution(dashboardData.serviceDistribution || []);
+        console.log('Service distribution set:', dashboardData.serviceDistribution?.length);
+        
+        // Format upcoming appointments
+        const upcoming = dashboardData.upcomingAppointments.map((appointment: any) => ({
+          id: appointment.id,
+          caregiver: appointment.caregiver,
+          service: appointment.service,
+          date: new Date(appointment.date).toLocaleDateString(),
+          time: appointment.startTime || 'TBD',
+          duration: `${appointment.duration || 2} hours`,
+          status: appointment.status,
+          amount: appointment.totalAmount || 0,
+        }));
+        
+        setUpcomingAppointments(upcoming);
+        console.log('Upcoming appointments set:', upcoming.length);
+      }
+      
+    } catch (error: any) {
+      console.error('Error fetching dashboard data:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      if (error.response?.status === 401) {
+        Alert.alert('Session Expired', 'Please log in again', [
+          {text: 'OK', onPress: () => navigation.navigate('Profile')},
+        ]);
+      } else {
+        Alert.alert('Error', `Failed to load dashboard data: ${error.response?.data?.message || error.message}`);
+      }
+      
+      // Set default empty data
+      setDashboardStats({
+        monthlyAppointments: 0,
+        assignedCaregivers: 0,
+        monthlyHours: 0,
+        satisfactionRate: 0,
+      });
+      setUpcomingAppointments([]);
+      setWeeklyActivity([]);
+      setServiceDistribution([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const renderCaregiverCard = ({item}: {item: Caregiver}) => (
-    <TouchableOpacity style={styles.caregiverCard}>
-      <View style={styles.caregiverHeader}>
-        <View style={styles.caregiverAvatar}>
-          <Text style={styles.caregiverInitial}>
-            {item.name.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View style={styles.caregiverInfo}>
-          <Text style={styles.caregiverName}>{item.name}</Text>
-          <Text style={styles.caregiverExperience}>
-            {item.experience} years exp.
-          </Text>
-        </View>
-        <View style={styles.caregiverRating}>
-          <Text style={styles.ratingText}>⭐ {item.rating?.toFixed(1)}</Text>
-        </View>
-      </View>
-      <View style={styles.caregiverSkills}>
-        {item.skills?.slice(0, 3).map((skill, index) => (
-          <View key={index} style={styles.skillBadge}>
-            <Text style={styles.skillText}>{skill}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={styles.caregiverFooter}>
-        <Text style={styles.hourlyRate}>${item.hourlyRate}/hr</Text>
-        <TouchableOpacity style={styles.requestButton}>
-          <Text style={styles.requestButtonText}>Request</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchDashboardData();
+    setRefreshing(false);
+  };
+  
+  const paginatedAppointments = upcomingAppointments.slice(
+    appointmentPage * ITEMS_PER_PAGE,
+    (appointmentPage + 1) * ITEMS_PER_PAGE
   );
+  
+  const totalAppointmentPages = Math.ceil(upcomingAppointments.length / ITEMS_PER_PAGE);
+
+  const userName = user?.name || 'Care Receiver';
+  const firstName = userName.split(' ')[0];
+  
+  const getServiceColor = (index: number) => {
+    const colors = ['#10b981', '#2563eb', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#f43f5e'];
+    return colors[index % colors.length];
+  };
+
+  const getMaxActivity = () => {
+    if (weeklyActivity.length === 0) return 10;
+    return Math.max(...weeklyActivity.map(d => Math.max(d.hours, d.appointments)));
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.userName}>Dashboard</Text>
+          <TouchableOpacity onPress={() => setMenuVisible(true)}>
+            <Icon name="menu" size={24} color="#374151" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#8b5cf6" />
+          <Text style={styles.loadingText}>Loading dashboard...</Text>
+          <Text style={styles.loadingSubtext}>
+            Please ensure you are logged in{'\n'}and the backend is running
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Side Menu */}
+      <SideMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        navigation={navigation}
+      />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.welcomeText}>Welcome back,</Text>
+          <Text style={styles.userName}>{firstName}!</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => setMenuVisible(true)}
+          style={styles.menuButton}>
+          <Icon name="menu" size={24} color="#374151" />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={loadDashboardData} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#8b5cf6"
+            colors={['#8b5cf6']}
+          />
         }>
-        <View style={styles.header}>
-          <Text style={styles.greeting}>Hello,</Text>
-          <Text style={styles.name}>{user?.name || 'Care Receiver'}</Text>
-        </View>
-
         {/* Stats Cards */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{stats?.activeRequests || 0}</Text>
-            <Text style={styles.statLabel}>Active Requests</Text>
-            <Text style={styles.statIcon}>📋</Text>
+        <View style={styles.statsSection}>
+          <View style={styles.statsRow}>
+            {/* Monthly Appointments Card */}
+            <View style={[styles.statCard, styles.bookingsCard]}>
+              <View style={styles.statHeader}>
+                <View style={[styles.statIcon, styles.bookingsIcon]}>
+                  <Icon name="calendar" size={22} color="#2563eb" />
+                </View>
+                <Text style={styles.statBadge}>This Month</Text>
+              </View>
+              <Text style={styles.statValue}>{dashboardStats.monthlyAppointments}</Text>
+              <Text style={styles.statLabel}>Appointments</Text>
+              <View style={styles.statFooter}>
+                <Icon name="trending-up" size={12} color="#10b981" />
+                <Text style={styles.statTrend}>This month</Text>
+              </View>
+            </View>
+
+            {/* Assigned Caregivers Card */}
+            <View style={[styles.statCard, styles.spentCard]}>
+              <View style={styles.statHeader}>
+                <View style={[styles.statIcon, styles.spentIcon]}>
+                  <Icon name="users" size={22} color="#10b981" />
+                </View>
+                <Text style={styles.statBadgeGreen}>Active</Text>
+              </View>
+              <Text style={styles.statValue}>{dashboardStats.assignedCaregivers}</Text>
+              <Text style={styles.statLabel}>Assigned Caregivers</Text>
+              <View style={styles.statFooter}>
+                <Icon name="check-circle" size={12} color="#10b981" />
+                <Text style={styles.statTrend}>Available now</Text>
+              </View>
+            </View>
           </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{stats?.totalCaregivers || 0}</Text>
-            <Text style={styles.statLabel}>Available Caregivers</Text>
-            <Text style={styles.statIcon}>👥</Text>
-          </View>
+          <View style={styles.statsRow}>
+            {/* Monthly Care Hours Card */}
+            <View style={[styles.statCard, styles.hoursCard]}>
+              <View style={styles.statHeader}>
+                <View style={[styles.statIcon, styles.hoursIcon]}>
+                  <Icon name="clock" size={22} color="#8b5cf6" />
+                </View>
+                <Text style={styles.statBadgeGreen}>This Month</Text>
+              </View>
+              <Text style={styles.statValue}>{dashboardStats.monthlyHours}h</Text>
+              <Text style={styles.statLabel}>Care Hours</Text>
+              <View style={styles.statFooter}>
+                <Icon name="clock" size={12} color="#8b5cf6" />
+                <Text style={styles.statTrend}>Completed this month</Text>
+              </View>
+            </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{stats?.upcomingAppointments || 0}</Text>
-            <Text style={styles.statLabel}>Upcoming</Text>
-            <Text style={styles.statIcon}>📅</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>${stats?.totalSpent || 0}</Text>
-            <Text style={styles.statLabel}>Total Spent</Text>
-            <Text style={styles.statIcon}>💰</Text>
+            {/* Satisfaction Rate Card */}
+            <View style={[styles.statCard, styles.ratingCard]}>
+              <View style={styles.statHeader}>
+                <View style={[styles.statIcon, styles.ratingIcon]}>
+                  <Icon name="heart" size={22} color="#f59e0b" />
+                </View>
+                <Text style={styles.statBadgeGreen}>Excellent</Text>
+              </View>
+              <Text style={styles.statValue}>{dashboardStats.satisfactionRate}%</Text>
+              <Text style={styles.statLabel}>Satisfaction Rate</Text>
+              <View style={styles.statFooter}>
+                <Icon name="star" size={12} color="#f59e0b" />
+                <Text style={styles.statTrend}>Based on ratings</Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Profile Summary */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Your Care Profile</Text>
-          <View style={styles.profileInfo}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Age:</Text>
-              <Text style={styles.infoValue}>{profile?.age || 'Not set'}</Text>
+        {/* Weekly Care Activity Chart */}
+        {weeklyActivity.length > 0 ? (
+          <View style={styles.chartCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.chartTitle}>Weekly Care Activity</Text>
+              <Text style={styles.subtitle}>Last 7 days overview</Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Medical Conditions:</Text>
-              <Text style={styles.infoValue}>
-                {profile?.medicalConditions?.join(', ') || 'None specified'}
-              </Text>
+            <View style={styles.chartContainer}>
+              <View style={styles.chartYAxis}>
+                <Text style={styles.yAxisLabel}>Count</Text>
+              </View>
+              <View style={styles.chartBars}>
+                {weeklyActivity.map((data, index) => (
+                  <View key={index} style={styles.barContainer}>
+                    <View style={styles.barGroup}>
+                      <View style={styles.barWrapper}>
+                        {data.hours > 0 && (
+                          <Text style={styles.barValue}>{data.hours}</Text>
+                        )}
+                        <View
+                          style={[
+                            styles.bar,
+                            styles.hoursBar,
+                            {
+                              height: `${(data.hours / getMaxActivity()) * 100}%`,
+                            },
+                          ]}
+                        />
+                      </View>
+                      <View style={styles.barWrapper}>
+                        {data.appointments > 0 && (
+                          <Text style={styles.barValue}>{data.appointments}</Text>
+                        )}
+                        <View
+                          style={[
+                            styles.bar,
+                            styles.appointmentsBar,
+                            {
+                              height: `${(data.appointments / getMaxActivity()) * 100}%`,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                    <Text style={styles.barLabel}>{data.day}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Emergency Contact:</Text>
-              <Text style={styles.infoValue}>
-                {profile?.emergencyContact?.name || 'Not set'}
+            <View style={styles.chartLegend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, {backgroundColor: '#3b82f6'}]} />
+                <Text style={styles.legendText}>Hours</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, {backgroundColor: '#8b5cf6'}]} />
+                <Text style={styles.legendText}>Appointments</Text>
+              </View>
+            </View>
+            
+            {/* Weekly Summary */}
+            <View style={styles.weeklySummary}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>
+                  {weeklyActivity.reduce((sum, d) => sum + d.hours, 0)}h
+                </Text>
+                <Text style={styles.summaryLabel}>Total Hours</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>
+                  {weeklyActivity.reduce((sum, d) => sum + d.appointments, 0)}
+                </Text>
+                <Text style={styles.summaryLabel}>Total Appointments</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>
+                  {(weeklyActivity.reduce((sum, d) => sum + d.hours, 0) / 7).toFixed(1)}h
+                </Text>
+                <Text style={styles.summaryLabel}>Daily Average</Text>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.chartCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.chartTitle}>Weekly Care Activity</Text>
+              <Text style={styles.subtitle}>Last 7 days overview</Text>
+            </View>
+            <View style={styles.emptyState}>
+              <Icon name="activity" size={48} color="#d1d5db" />
+              <Text style={styles.emptyText}>No activity data yet</Text>
+              <Text style={styles.emptySubtext}>
+                Complete appointments to see weekly trends
               </Text>
             </View>
           </View>
-        </View>
+        )}
 
-        {/* Available Caregivers */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Available Caregivers</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View All →</Text>
-            </TouchableOpacity>
+        {/* Care Services Distribution */}
+        {serviceDistribution.length > 0 ? (
+          <View style={styles.chartCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.chartTitle}>Care Services Distribution</Text>
+              <Text style={styles.subtitle}>
+                {serviceDistribution.reduce((sum, s) => sum + s.value, 0)} total services • {serviceDistribution.length} types
+              </Text>
+            </View>
+            
+            {/* Service List */}
+            <View style={styles.serviceList}>
+              {serviceDistribution.map((service, index) => (
+                <View key={index} style={styles.serviceItemContainer}>
+                  <View style={styles.serviceItem}>
+                    <View style={styles.serviceLeft}>
+                      <View
+                        style={[
+                          styles.serviceDot,
+                          {backgroundColor: getServiceColor(index)},
+                        ]}
+                      />
+                      <Text style={styles.serviceName}>{service.name}</Text>
+                    </View>
+                    <View style={styles.serviceRight}>
+                      <Text style={styles.serviceValue}>{service.value} bookings</Text>
+                      <View style={styles.percentageBadge}>
+                        <Text style={styles.servicePercentage}>{service.percentage}%</Text>
+                      </View>
+                    </View>
+                  </View>
+                  {/* Progress Bar */}
+                  <View style={styles.progressBarContainer}>
+                    <View
+                      style={[
+                        styles.progressBar,
+                        {
+                          width: `${service.percentage}%`,
+                          backgroundColor: getServiceColor(index),
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
           </View>
-          {availableCaregivers.length > 0 ? (
-            availableCaregivers.map(caregiver => (
-              <View key={caregiver._id}>
-                {renderCaregiverCard({item: caregiver})}
+        ) : (
+          <View style={styles.chartCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.chartTitle}>Care Services Distribution</Text>
+              <Text style={styles.subtitle}>Service types breakdown</Text>
+            </View>
+            <View style={styles.emptyState}>
+              <Icon name="pie-chart" size={48} color="#d1d5db" />
+              <Text style={styles.emptyText}>No services data</Text>
+              <Text style={styles.emptySubtext}>
+                Book services to see distribution
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Upcoming Appointments */}
+        <View style={styles.chartCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.chartTitle}>Upcoming Appointments</Text>
+            <Text style={styles.subtitle}>
+              {upcomingAppointments.length} total bookings
+            </Text>
+          </View>
+          {paginatedAppointments.length > 0 ? (
+            paginatedAppointments.map(appointment => (
+              <View key={appointment.id} style={styles.appointmentItem}>
+                <View style={styles.appointmentIcon}>
+                  <Icon name="user" size={20} color="#8b5cf6" />
+                </View>
+                <View style={styles.appointmentInfo}>
+                  <Text style={styles.appointmentCaregiver}>
+                    {appointment.caregiver}
+                  </Text>
+                  <Text style={styles.appointmentDetails}>
+                    {appointment.service} • {appointment.duration}
+                  </Text>
+                </View>
+                <View style={styles.appointmentRight}>
+                  <Text style={styles.appointmentTime}>
+                    {appointment.date}
+                  </Text>
+                  <Text style={styles.appointmentTimeDetails}>
+                    {appointment.time}
+                  </Text>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      appointment.status === 'confirmed'
+                        ? styles.confirmedBadge
+                        : styles.pendingBadge,
+                    ]}>
+                    <Icon
+                      name={
+                        appointment.status === 'confirmed'
+                          ? 'check-circle'
+                          : 'alert-circle'
+                      }
+                      size={12}
+                      color={
+                        appointment.status === 'confirmed' ? '#10b981' : '#f59e0b'
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.statusText,
+                        appointment.status === 'confirmed'
+                          ? styles.confirmedText
+                          : styles.pendingText,
+                      ]}>
+                      {appointment.status === 'confirmed' ? 'Confirmed' : 'Pending'}
+                    </Text>
+                  </View>
+                </View>
               </View>
             ))
           ) : (
-            <Text style={styles.emptyText}>
-              No caregivers available at the moment
-            </Text>
+            <View style={styles.emptyState}>
+              <Icon name="calendar" size={48} color="#d1d5db" />
+              <Text style={styles.emptyText}>No upcoming appointments</Text>
+              <Text style={styles.emptySubtext}>
+                Book a caregiver to get started
+              </Text>
+            </View>
           )}
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionIcon}>🔍</Text>
-              <Text style={styles.actionText}>Find Caregiver</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionIcon}>💳</Text>
-              <Text style={styles.actionText}>Payments</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionIcon}>📅</Text>
-              <Text style={styles.actionText}>Appointments</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionIcon}>💬</Text>
-              <Text style={styles.actionText}>Messages</Text>
-            </TouchableOpacity>
-          </View>
+          
+          {/* Pagination Controls */}
+          {totalAppointmentPages > 1 && (
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.paginationButton,
+                  appointmentPage === 0 && styles.paginationButtonDisabled,
+                ]}
+                onPress={() => setAppointmentPage(appointmentPage - 1)}
+                disabled={appointmentPage === 0}>
+                <Icon
+                  name="chevron-left"
+                  size={18}
+                  color={appointmentPage === 0 ? '#d1d5db' : '#8b5cf6'}
+                />
+              </TouchableOpacity>
+              
+              <View style={styles.pageIndicatorContainer}>
+                {[...Array(totalAppointmentPages)].map((_, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => setAppointmentPage(index)}>
+                    <View
+                      style={[
+                        styles.pageIndicator,
+                        appointmentPage === index && styles.pageIndicatorActive,
+                      ]}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              <TouchableOpacity
+                style={[
+                  styles.paginationButton,
+                  appointmentPage === totalAppointmentPages - 1 &&
+                    styles.paginationButtonDisabled,
+                ]}
+                onPress={() => setAppointmentPage(appointmentPage + 1)}
+                disabled={appointmentPage === totalAppointmentPages - 1}>
+                <Icon
+                  name="chevron-right"
+                  size={18}
+                  color={
+                    appointmentPage === totalAppointmentPages - 1
+                      ? '#d1d5db'
+                      : '#8b5cf6'
+                  }
+                />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -193,224 +561,463 @@ const CareReceiverDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  loadingSubtext: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#9ca3af',
+    textAlign: 'center',
   },
   header: {
-    marginBottom: 24,
-  },
-  greeting: {
-    fontSize: 16,
-    color: '#64748b',
-  },
-  name: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginTop: 4,
-  },
-  statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
-  },
-  statCard: {
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    flex: 1,
-    minWidth: '47%',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  menuButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f9fafb',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  statsSection: {
+    padding: 20,
+    paddingBottom: 0,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  bookingsCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563eb',
+  },
+  spentCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
+  },
+  hoursCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#8b5cf6',
+  },
+  ratingCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bookingsIcon: {
+    backgroundColor: '#eff6ff',
+  },
+  spentIcon: {
+    backgroundColor: '#f0fdf4',
+  },
+  hoursIcon: {
+    backgroundColor: '#f5f3ff',
+  },
+  ratingIcon: {
+    backgroundColor: '#fef3c7',
+  },
+  statBadge: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  statBadgeGreen: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#10b981',
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2563eb',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111827',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#6b7280',
+    fontWeight: '500',
   },
-  statIcon: {
-    fontSize: 24,
-    position: 'absolute',
-    top: 16,
-    right: 16,
+  statFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
   },
-  card: {
+  statTrend: {
+    fontSize: 11,
+    color: '#6b7280',
+  },
+  chartCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 20,
+    marginHorizontal: 20,
     marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 16,
-  },
-  viewAllText: {
-    fontSize: 14,
-    color: '#2563eb',
-    fontWeight: '500',
-  },
-  profileInfo: {
-    gap: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#1e293b',
-    flex: 1,
-    textAlign: 'right',
-  },
-  caregiverCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e7eb',
   },
-  caregiverHeader: {
+  sectionHeader: {
+    marginBottom: 20,
+  },
+  chartTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  chartContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    height: 200,
+    marginTop: 16,
   },
-  caregiverAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#2563eb',
+  chartYAxis: {
+    width: 30,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  caregiverInitial: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
+  yAxisLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    transform: [{rotate: '-90deg'}],
   },
-  caregiverInfo: {
+  chartBars: {
     flex: 1,
-    marginLeft: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingBottom: 25,
   },
-  caregiverName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
+  barContainer: {
+    flex: 1,
+    alignItems: 'center',
+    height: '100%',
   },
-  caregiverExperience: {
+  barGroup: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3,
+    flex: 1,
+    width: '100%',
+    paddingHorizontal: 2,
+  },
+  barWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  barValue: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 2,
+  },
+  bar: {
+    width: '100%',
+    borderRadius: 4,
+    minHeight: 20,
+  },
+  hoursBar: {
+    backgroundColor: '#3b82f6',
+  },
+  appointmentsBar: {
+    backgroundColor: '#8b5cf6',
+  },
+  barLabel: {
+    fontSize: 10,
+    color: '#6b7280',
+    marginTop: 6,
+    position: 'absolute',
+    bottom: 0,
+  },
+  chartLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 16,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  weeklySummary: {
+    flexDirection: 'row',
+    paddingTop: 20,
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  summaryLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 12,
+  },
+  serviceList: {
+    gap: 16,
+  },
+  serviceItemContainer: {
+    gap: 8,
+  },
+  serviceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressBarContainer: {
+    height: 6,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  percentageBadge: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  serviceLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  serviceRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  serviceDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  serviceName: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  serviceValue: {
     fontSize: 13,
-    color: '#64748b',
-    marginTop: 2,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginRight: 8,
   },
-  caregiverRating: {
-    backgroundColor: '#fff',
+  servicePercentage: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  appointmentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  appointmentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#f5f3ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  appointmentInfo: {
+    flex: 1,
+  },
+  appointmentCaregiver: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  appointmentDetails: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  appointmentRight: {
+    alignItems: 'flex-end',
+  },
+  appointmentTime: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 2,
+  },
+  appointmentTimeDetails: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 6,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  ratingText: {
-    fontSize: 13,
-    fontWeight: '500',
+  confirmedBadge: {
+    backgroundColor: '#f0fdf4',
   },
-  caregiverSkills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
+  pendingBadge: {
+    backgroundColor: '#fef3c7',
   },
-  skillBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
-  skillText: {
-    fontSize: 12,
-    color: '#2563eb',
+  confirmedText: {
+    color: '#10b981',
   },
-  caregiverFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  pendingText: {
+    color: '#f59e0b',
+  },
+  emptyState: {
     alignItems: 'center',
-  },
-  hourlyRate: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#22c55e',
-  },
-  requestButton: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  requestButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    paddingVertical: 40,
   },
   emptyText: {
-    textAlign: 'center',
-    color: '#94a3b8',
-    fontSize: 14,
-    paddingVertical: 20,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#9ca3af',
+    marginTop: 16,
   },
-  actionsGrid: {
+  emptySubtext: {
+    fontSize: 14,
+    color: '#d1d5db',
+    marginTop: 4,
+  },
+  paginationContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
     gap: 12,
   },
-  actionButton: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
-    flex: 1,
-    minWidth: '47%',
+  paginationButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#f9fafb',
+    justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e7eb',
   },
-  actionIcon: {
-    fontSize: 32,
-    marginBottom: 8,
+  paginationButtonDisabled: {
+    opacity: 0.4,
   },
-  actionText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#1e293b',
+  pageIndicatorContainer: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  pageIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#e5e7eb',
+  },
+  pageIndicatorActive: {
+    backgroundColor: '#8b5cf6',
+    width: 24,
   },
 });
 

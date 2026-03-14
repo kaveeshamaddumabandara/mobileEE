@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {CaregiverTabParamList} from '../../navigation/types';
@@ -26,6 +27,7 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
   const {user, logout} = useAuth();
   const [menuVisible, setMenuVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   
   // Dashboard state
   const [dashboardStats, setDashboardStats] = useState({
@@ -106,6 +108,12 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
       setLoading(false);
     }
   };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchDashboardData();
+    setRefreshing(false);
+  };
   
   const recentFeedback = allFeedback.slice(
     feedbackPage * ITEMS_PER_PAGE,
@@ -165,7 +173,15 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
 
       <ScrollView
         style={styles.scrollView}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#8b5cf6"
+            colors={['#8b5cf6']}
+          />
+        }>
         {/* Stats Cards */}
         <View style={styles.statsSection}>
           <View style={styles.statsRow}>
@@ -1076,6 +1092,83 @@ const styles = StyleSheet.create({
   },
   pendingText: {
     color: '#f59e0b',
+  },
+  pieChartContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 20,
+  },
+  pieChartWrapper: {
+    width: 140,
+    height: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pieChart: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#f3f4f6',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pieSlice: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    left: 0,
+    top: 0,
+  },
+  sliceInner: {
+    position: 'absolute',
+    width: 140,
+    height: 70,
+    backgroundColor: 'inherit',
+    borderTopLeftRadius: 70,
+    borderTopRightRadius: 70,
+    left: 0,
+    top: 0,
+    transformOrigin: '50% 100%',
+  },
+  pieLegend: {
+    flex: 1,
+    gap: 12,
+  },
+  pieLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pieLegendDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  pieLegendTextContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pieLegendLabel: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  pieLegendValue: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '700',
   },
 });
 

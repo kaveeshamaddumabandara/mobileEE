@@ -6,6 +6,9 @@ import {CareReceiverTabParamList} from './types';
 // Import screens
 import CareReceiverDashboardScreen from '../screens/carereceiver/CareReceiverDashboardScreen';
 import CareReceiverProfileScreen from '../screens/carereceiver/CareReceiverProfileScreen';
+import CareReceiverBookingsScreen from '../screens/carereceiver/CareReceiverBookingsScreen';
+// @ts-ignore - Module exists but TypeScript cache issue
+import ContactUsScreen from '../screens/common/ContactUsScreen';
 
 const Tab = createBottomTabNavigator<CareReceiverTabParamList>();
 
@@ -43,6 +46,15 @@ const CareReceiverNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
+        name="Bookings"
+        component={CareReceiverBookingsScreen}
+        options={{
+          title: 'Find Caregivers',
+          tabBarLabel: 'Bookings',
+          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📅</Text>,
+        }}
+      />
+      <Tab.Screen
         name="Payments"
         component={CareReceiverDashboardScreen}
         options={{
@@ -58,6 +70,15 @@ const CareReceiverNavigator: React.FC = () => {
           title: 'Profile',
           tabBarLabel: 'Profile',
           tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>👤</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="ContactUs"
+        component={ContactUsScreen}
+        options={{
+          title: 'Contact Us',
+          tabBarLabel: 'Contact',
+          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📞</Text>,
         }}
       />
     </Tab.Navigator>

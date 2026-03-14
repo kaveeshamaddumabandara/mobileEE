@@ -79,6 +79,8 @@ const CaregiverBookingsScreen: React.FC = () => {
     try {
       setLoadingBookings(true);
       const apiBookings = await api.getCaregiverBookings();
+      console.log('Fetched bookings from API:', apiBookings.length);
+      console.log('Bookings statuses:', apiBookings.map((b: any) => ({ id: b._id, status: b.status })));
       
       // Transform API data to match component format
       const transformedBookings = apiBookings.map((booking: any) => ({
@@ -92,7 +94,7 @@ const CaregiverBookingsScreen: React.FC = () => {
         location: booking.location,
         needs: booking.needs || '',
         status: booking.status,
-        phoneNumber: booking.careReceiverId?.phoneNumber || '',
+        phoneNumber: booking.careReceiverId?.phone || booking.careReceiverId?.phoneNumber || '',
         email: booking.careReceiverId?.email || '',
         careReceiverDetails: {
           age: booking.careReceiverId?.age || 0,
@@ -108,6 +110,8 @@ const CaregiverBookingsScreen: React.FC = () => {
         },
       }));
       
+      console.log('Transformed bookings:', transformedBookings.length);
+      console.log('Completed bookings:', transformedBookings.filter((b: any) => b.status === 'completed').length);
       setBookings(transformedBookings);
     } catch (error: any) {
       console.error('Error fetching bookings:', error);
@@ -231,6 +235,9 @@ const CaregiverBookingsScreen: React.FC = () => {
     b => b.status === 'completed'
   ).sort((a, b) => b.date.getTime() - a.date.getTime());
 
+  console.log('Upcoming bookings count:', upcomingBookings.length);
+  console.log('Completed bookings count:', completedBookings.length);
+
   const handleCall = (phoneNumber: string) => {
     Linking.openURL(`tel:${phoneNumber}`);
   };
@@ -345,6 +352,34 @@ const CaregiverBookingsScreen: React.FC = () => {
     setSelectedRequest(request);
     setRejectionReason('');
     setRejectionModalVisible(true);
+  };
+
+  const handleCompleteBooking = async (booking: Booking) => {
+    Alert.alert(
+      'Complete Booking',
+      `Mark this booking with ${booking.careReceiverName} as completed?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Complete',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await api.completeBooking(booking.id.toString());
+              Alert.alert('Success', 'Booking has been marked as completed!');
+              // Refresh bookings
+              fetchBookings();
+            } catch (error) {
+              console.error('Error completing booking:', error);
+              Alert.alert('Error', 'Failed to complete booking. Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const confirmRejection = async () => {
@@ -488,26 +523,36 @@ const CaregiverBookingsScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => openCallModal(booking)}>
-            <Icon name="phone" size={16} color="#8b5cf6" />
-            <Text style={styles.actionButtonText}>Call</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => openMessageModal(booking)}>
-            <Icon name="mail" size={16} color="#8b5cf6" />
-            <Text style={styles.actionButtonText}>Message</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => setSelectedBooking(booking)}>
-            <Icon name="eye" size={16} color="#8b5cf6" />
-            <Text style={styles.actionButtonText}>Details</Text>
-          </TouchableOpacity>
-        </View>
+        <>
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => openCallModal(booking)}>
+              <Icon name="phone" size={16} color="#8b5cf6" />
+              <Text style={styles.actionButtonText}>Call</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => openMessageModal(booking)}>
+              <Icon name="mail" size={16} color="#8b5cf6" />
+              <Text style={styles.actionButtonText}>Message</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setSelectedBooking(booking)}>
+              <Icon name="eye" size={16} color="#8b5cf6" />
+              <Text style={styles.actionButtonText}>Details</Text>
+            </TouchableOpacity>
+          </View>
+          {booking.status === 'confirmed' && (
+            <TouchableOpacity
+              style={styles.completeBookingButton}
+              onPress={() => handleCompleteBooking(booking)}>
+              <Icon name="check-circle" size={16} color="#fff" />
+              <Text style={styles.completeBookingText}>Mark as Complete</Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
     </TouchableOpacity>
   );
@@ -712,7 +757,10 @@ const CaregiverBookingsScreen: React.FC = () => {
                 <View style={styles.pendingActionsIconRow}>
                   <TouchableOpacity
                     style={styles.pendingActionIcon}
-                    onPress={() => request.careReceiverId?.phoneNumber && handleCall(request.careReceiverId.phoneNumber)}>
+                    onPress={() => {
+                      const phone = request.careReceiverId?.phone || request.careReceiverId?.phoneNumber;
+                      if (phone) handleCall(phone);
+                    }}>
                     <Icon name="phone" size={16} color="#8b5cf6" />
                     <Text style={styles.pendingActionIconText}>Call</Text>
                   </TouchableOpacity>
@@ -2465,6 +2513,21 @@ const styles = StyleSheet.create({
   },
   modalApproveText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  completeBookingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#10b981',
+    marginTop: 8,
+  },
+  completeBookingText: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#fff',
   },

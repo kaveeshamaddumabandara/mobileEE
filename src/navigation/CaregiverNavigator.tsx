@@ -12,6 +12,8 @@ import CaregiverBookingsScreen from '../screens/caregiver/CaregiverBookingsScree
 import CareDocumentationScreen from '../screens/caregiver/CareDocumentationScreen';
 // @ts-ignore - Module exists but TypeScript cache issue
 import CaregiverPaymentScreen from '../screens/caregiver/CaregiverPaymentScreen';
+// @ts-ignore - Module exists but TypeScript cache issue
+import ContactUsScreen from '../screens/common/ContactUsScreen';
 
 const Tab = createBottomTabNavigator<CaregiverTabParamList>();
 
@@ -82,6 +84,15 @@ const CaregiverNavigator: React.FC = () => {
           title: 'Profile',
           tabBarLabel: 'Profile',
           tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>👤</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="ContactUs"
+        component={ContactUsScreen}
+        options={{
+          title: 'Contact Us',
+          tabBarLabel: 'Contact',
+          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📞</Text>,
         }}
       />
     </Tab.Navigator>

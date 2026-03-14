@@ -30,6 +30,9 @@ export interface Caregiver extends User {
 export interface CareReceiver extends User {
   role: 'carereceiver';
   age?: number;
+  dateOfBirth?: string;
+  city?: string;
+  district?: string;
   medicalConditions?: string[];
   emergencyContact?: {
     name: string;
@@ -58,6 +61,14 @@ export interface RegisterData {
   qualification?: string;
   experience?: number;
   dateOfBirth?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  medicalConditions?: string;
+  careRequirements?: string;
   emergencyContact?: {
     name: string;
     phone: string;

@@ -53,6 +53,9 @@ const CaregiverPaymentScreen: React.FC = () => {
   const [paymentType, setPaymentType] = useState<'registration' | 'commission'>('registration');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('Credit Card');
   const [transactionReference, setTransactionReference] = useState('');
+  
+  // Data view toggle
+  const [showDataView, setShowDataView] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
 
@@ -272,6 +275,108 @@ const CaregiverPaymentScreen: React.FC = () => {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Data View Toggle */}
+        <TouchableOpacity
+          style={styles.dataViewToggle}
+          onPress={() => setShowDataView(!showDataView)}>
+          <Icon name={showDataView ? 'eye-off' : 'eye'} size={18} color="#8b5cf6" />
+          <Text style={styles.dataViewToggleText}>
+            {showDataView ? 'Hide' : 'Show'} Raw Data
+          </Text>
+        </TouchableOpacity>
+
+        {/* Data View Section */}
+        {showDataView && (
+          <View style={styles.dataViewCard}>
+            <View style={styles.dataViewHeader}>
+              <Icon name="database" size={20} color="#8b5cf6" />
+              <Text style={styles.dataViewTitle}>Current Data</Text>
+            </View>
+            
+            <View style={styles.dataSection}>
+              <Text style={styles.dataSectionTitle}>Registration Fee Status</Text>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Fee Paid:</Text>
+                <Text style={[styles.dataValue, registrationFeePaid ? styles.dataSuccess : styles.dataWarning]}>
+                  {registrationFeePaid ? 'Yes' : 'No'}
+                </Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Fee Amount:</Text>
+                <Text style={styles.dataValue}>LKR {registrationFeeAmount.toLocaleString()}</Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Can Make Payment:</Text>
+                <Text style={styles.dataValue}>{canMakeRegistrationPayment ? 'Yes' : 'No'}</Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Approval Status:</Text>
+                <Text style={styles.dataValue}>{approvalStatus || 'N/A'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.dataSection}>
+              <Text style={styles.dataSectionTitle}>Commission Status</Text>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Total Bookings:</Text>
+                <Text style={styles.dataValue}>{totalBookingsCompleted}</Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Since Last Payment:</Text>
+                <Text style={styles.dataValue}>{bookingsSinceLastPayment}</Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Commission Rate:</Text>
+                <Text style={styles.dataValue}>LKR {commissionRate.toLocaleString()}</Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Commission Due:</Text>
+                <Text style={[styles.dataValue, requiresCommissionPayment ? styles.dataWarning : styles.dataSuccess]}>
+                  LKR {commissionDue.toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Bookings Until Next:</Text>
+                <Text style={styles.dataValue}>{bookingsUntilNextPayment}</Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Requires Payment:</Text>
+                <Text style={[styles.dataValue, requiresCommissionPayment ? styles.dataWarning : styles.dataSuccess]}>
+                  {requiresCommissionPayment ? 'Yes' : 'No'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.dataSection}>
+              <Text style={styles.dataSectionTitle}>Payment History</Text>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Total Transactions:</Text>
+                <Text style={styles.dataValue}>{paymentHistory.length}</Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Total Amount Paid:</Text>
+                <Text style={styles.dataValue}>
+                  LKR {paymentHistory.reduce((sum, p) => sum + p.amount, 0).toLocaleString()}
+                </Text>
+              </View>
+              {paymentHistory.length > 0 && (
+                <>
+                  <View style={styles.dataRow}>
+                    <Text style={styles.dataLabel}>Last Payment:</Text>
+                    <Text style={styles.dataValue}>
+                      {new Date(paymentHistory[0].createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={styles.dataRow}>
+                    <Text style={styles.dataLabel}>Last Amount:</Text>
+                    <Text style={styles.dataValue}>LKR {paymentHistory[0].amount.toLocaleString()}</Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Registration Fee Section */}
         {!registrationFeePaid && (
           <View style={styles.alertCard}>
@@ -975,6 +1080,89 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
+  },
+  dataViewToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#f5f3ff',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+  },
+  dataViewToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8b5cf6',
+  },
+  dataViewCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+  },
+  dataViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9d5ff',
+  },
+  dataViewTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8b5cf6',
+  },
+  dataSection: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  dataSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  dataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  dataLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    flex: 1,
+  },
+  dataValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+    textAlign: 'right',
+  },
+  dataSuccess: {
+    color: '#10b981',
+  },
+  dataWarning: {
+    color: '#f59e0b',
   },
   paymentMethods: {
     marginBottom: 20,

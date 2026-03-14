@@ -122,7 +122,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         Alert.alert('About Us', 'ElderEase connects caregivers with those who need compassionate care. Our platform makes it easy to find trusted professionals.');
         break;
       case 'contact':
-        Alert.alert('Contact Us', 'Email: support@elderease.com\nPhone: +1 (555) 123-4567\nHours: Mon-Fri 9AM-5PM');
+        navigation.navigate('ContactUs');
         break;
       case 'help':
         Alert.alert('Help', 'Need assistance? Visit our help center or contact support.\n\nCommon topics:\n• Account setup\n• Registration process\n• Payment methods');
@@ -443,7 +443,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
               style={styles.input}
               value={formData.dateOfBirth}
               onChangeText={value => handleChange('dateOfBirth', value)}
-              placeholder="MM/DD/YYYY"
+              placeholder="YYYY-MM-DD"
             />
 
             <Text style={styles.label}>Phone Number *</Text>
@@ -534,8 +534,8 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
                 style={styles.eyeIcon}>
                 <Icon 
                   name={showPassword ? "eye" : "eye-off"} 
-                  size={20} 
-                  color="#9ca3af" 
+                  size={22} 
+                  color="#6b7280" 
                 />
               </TouchableOpacity>
             </View>
@@ -572,8 +572,8 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
                 style={styles.eyeIcon}>
                 <Icon 
                   name={showConfirmPassword ? "eye" : "eye-off"} 
-                  size={20} 
-                  color="#9ca3af" 
+                  size={22} 
+                  color="#6b7280" 
                 />
               </TouchableOpacity>
             </View>
@@ -1239,7 +1239,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#e5e7eb',
     borderRadius: 14,
-    paddingHorizontal: 18,
+    paddingLeft: 18,
+    paddingRight: 8,
+    minHeight: 52,
   },
   passwordInput: {
     flex: 1,
@@ -1248,27 +1250,52 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   eyeIcon: {
-    padding: 4,
+    padding: 10,
+    marginLeft: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
   },
   strengthContainer: {
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: 16,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   strengthBarBackground: {
-    height: 4,
+    height: 12,
     backgroundColor: '#e5e7eb',
-    borderRadius: 2,
+    borderRadius: 6,
     overflow: 'hidden',
-    marginBottom: 6,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   strengthBarFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
   },
   strengthText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     textAlign: 'right',
+    letterSpacing: 0.5,
   },
 });
 

@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: 'rgba(255, 255, 255, 0.58)',
   },
   content: {
     flex: 1,
@@ -120,12 +120,18 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 12,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.15)',
+    textShadowOffset: {width: 0, height: 2},
+    textShadowRadius: 4,
   },
   subtitle: {
     fontSize: 18,
     color: '#374151',
     textAlign: 'center',
     lineHeight: 24,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: {width: 0, height: 1},
+    textShadowRadius: 3,
   },
   roleContainer: {
     width: '100%',
@@ -138,6 +144,9 @@ const styles = StyleSheet.create({
     color: '#111827',
     textAlign: 'center',
     marginBottom: 24,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: {width: 0, height: 1},
+    textShadowRadius: 2,
   },
   roleButton: {
     backgroundColor: '#ffffff',
@@ -151,11 +160,11 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
   iconContainer: {
     width: 56,
@@ -164,6 +173,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   careReceiverIcon: {
     backgroundColor: '#dbeafe',
@@ -193,11 +207,15 @@ const styles = StyleSheet.create({
   signInText: {
     fontSize: 16,
     color: '#4b5563',
+    textShadowColor: 'rgba(0, 0, 0, 0.08)',
+    textShadowOffset: {width: 0, height: 1},
+    textShadowRadius: 2,
   },
   signInLink: {
     fontSize: 16,
     color: '#2563eb',
     fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });
 

@@ -13,7 +13,8 @@ import {
 } from '../types';
 
 // Update this to your backend URL
-const API_BASE_URL = 'http://192.168.1.3:3001/api';
+// For iOS Simulator use localhost, for Android Emulator use 10.0.2.2, for physical device use your computer's IP
+const API_BASE_URL = 'http://localhost:3001/api';
 
 class ApiService {
   private api: AxiosInstance;
@@ -23,6 +24,9 @@ class ApiService {
       baseURL: API_BASE_URL,
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       },
     });
 
@@ -33,6 +37,11 @@ class ApiService {
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        // Ensure fresh data by adding timestamp to prevent caching
+        config.params = {
+          ...config.params,
+          _t: new Date().getTime(),
+        };
         return config;
       },
       error => {
@@ -112,6 +121,42 @@ class ApiService {
       };
     }
     
+    if (parsedUser?.role === 'carereceiver') {
+      const response = await this.api.get('/carereceiver/profile');
+      console.log('🌐 Backend response:', JSON.stringify(response.data, null, 2));
+      // Backend returns {status, data: {careReceiver}} where careReceiver has populated userId
+      const careReceiver = response.data.data.careReceiver;
+      const userData = careReceiver.userId;
+      
+      console.log('👤 userData:', JSON.stringify(userData, null, 2));
+      console.log('📛 userData.name:', userData?.name);
+      
+      if (!userData) {
+        throw new Error('User data not populated in care receiver profile');
+      }
+      
+      // Merge User data with CareReceiver data
+      const mergedData = {
+        ...userData,
+        _id: userData._id,
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        profileImage: userData.profileImage,
+        medicalConditions: careReceiver.medicalHistory?.map((m: any) => m.condition).filter(Boolean) || [],
+        careRequirements: careReceiver.careNeeds?.join(', ') || '',
+        emergencyContact: userData.emergencyContact || careReceiver.emergencyContact,
+        // Map address fields from User.address object
+        address: userData.address?.street || '',
+        city: userData.address?.city || '',
+        district: userData.address?.state || '',
+        dateOfBirth: userData.dateOfBirth,
+      };
+      
+      console.log('✅ Merged profile data:', JSON.stringify(mergedData, null, 2));
+      return mergedData;
+    }
+    
     const response = await this.api.get<User>('/profile');
     return response.data;
   }
@@ -155,6 +200,16 @@ class ApiService {
 
   // Caregiver endpoints
   async getCaregivers(): Promise<Caregiver[]> {
+    const user = await AsyncStorage.getItem('user');
+    const parsedUser = user ? JSON.parse(user) : null;
+    
+    // Care receivers should get available caregivers from their own endpoint
+    if (parsedUser?.role === 'carereceiver') {
+      const response = await this.api.get('/carereceiver/available-caregivers');
+      return response.data.data;
+    }
+    
+    // For other roles (admin, etc.)
     const response = await this.api.get<Caregiver[]>('/caregiver');
     return response.data;
   }
@@ -268,6 +323,12 @@ class ApiService {
   async getDashboardStats(): Promise<any> {
     const response = await this.api.get('/dashboard/stats');
     return response.data;
+  }
+
+  // Care Receiver Dashboard
+  async getCareReceiverDashboard(): Promise<any> {
+    const response = await this.api.get('/carereceiver/dashboard');
+    return response.data.data;
   }
 
   // Booking Request endpoints (Caregiver)
@@ -475,6 +536,17 @@ class ApiService {
   async getPaymentAnalytics(): Promise<any> {
     const response = await this.api.get('/caregiver/payment/analytics');
     return response.data.data;
+  }
+
+  // Contact endpoints
+  async submitContactForm(data: {
+    name: string;
+    email: string;
+    subject: string;
+    message: string;
+  }): Promise<{status: string; message: string}> {
+    const response = await this.api.post('/contact', data);
+    return response.data;
   }
 }
 
