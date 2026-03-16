@@ -1,7 +1,8 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {Platform} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {CaregiverTabParamList} from './types';
+import Icon from 'react-native-vector-icons/Feather';
 
 // Import screens
 import CaregiverDashboardScreen from '../screens/caregiver/CaregiverDashboardScreen';
@@ -10,10 +11,6 @@ import CaregiverProfileScreen from '../screens/caregiver/CaregiverProfileScreen'
 import CaregiverBookingsScreen from '../screens/caregiver/CaregiverBookingsScreen';
 // @ts-ignore - Module exists but TypeScript cache issue
 import CareDocumentationScreen from '../screens/caregiver/CareDocumentationScreen';
-// @ts-ignore - Module exists but TypeScript cache issue
-import CaregiverPaymentScreen from '../screens/caregiver/CaregiverPaymentScreen';
-// @ts-ignore - Module exists but TypeScript cache issue
-import ContactUsScreen from '../screens/common/ContactUsScreen';
 
 const Tab = createBottomTabNavigator<CaregiverTabParamList>();
 
@@ -22,77 +19,71 @@ const CaregiverNavigator: React.FC = () => {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#8b5cf6',
-        tabBarInactiveTintColor: '#94a3b8',
+        tabBarActiveTintColor: '#7C3AED', // Purple 600
+        tabBarInactiveTintColor: '#9CA3AF', // Gray 400
         tabBarStyle: {
-          display: 'none',
+          backgroundColor: '#FFFFFF',
+          height: Platform.OS === 'ios' ? 88 : 65,
+          paddingTop: 10,
+          paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+          borderTopWidth: 1,
+          borderTopColor: '#F3F4F6',
+          elevation: 0,
+          shadowColor: '#000',
+          shadowOffset: {
+            width: 0,
+            height: -2,
+          },
+          shadowOpacity: 0.05,
+          shadowRadius: 3,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: Platform.OS === 'ios' ? 0 : 5,
+        },
+        tabBarIconStyle: {
+          marginBottom: 0,
         },
       }}>
       <Tab.Screen
         name="Dashboard"
         component={CaregiverDashboardScreen}
         options={{
-          title: 'Dashboard',
           tabBarLabel: 'Home',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>🏠</Text>,
+          tabBarIcon: ({color, size}) => (
+            <Icon name="home" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
         name="Bookings"
         component={CaregiverBookingsScreen}
         options={{
-          title: 'My Bookings',
-          tabBarLabel: 'Bookings',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📅</Text>,
+          tabBarLabel: 'Jobs',
+          tabBarIcon: ({color, size}) => (
+            <Icon name="briefcase" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
         name="CareDocumentation"
         component={CareDocumentationScreen}
         options={{
-          title: 'Care Docs',
-          tabBarLabel: 'Care Docs',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📝</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="Requests"
-        component={CaregiverDashboardScreen}
-        options={{
-          title: 'Requests',
-          tabBarLabel: 'Requests',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📋</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="Payments"
-        component={CaregiverPaymentScreen}
-        options={{
-          title: 'Payments',
-          tabBarLabel: 'Payments',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>💳</Text>,
+          tabBarLabel: 'Logs',
+          tabBarIcon: ({color, size}) => (
+            <Icon name="file-text" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
         name="Profile"
         component={CaregiverProfileScreen}
         options={{
-          title: 'Profile',
           tabBarLabel: 'Profile',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>👤</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="ContactUs"
-        component={ContactUsScreen}
-        options={{
-          title: 'Contact Us',
-          tabBarLabel: 'Contact',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📞</Text>,
+          tabBarIcon: ({color, size}) => (
+            <Icon name="user" size={size} color={color} />
+          ),
         }}
       />
     </Tab.Navigator>

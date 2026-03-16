@@ -16,6 +16,10 @@ import {CareReceiverTabParamList} from '../../navigation/types';
 import {useAuth} from '../../context/AuthContext';
 import ApiService from '../../services/api';
 import Icon from 'react-native-vector-icons/Feather';
+import {
+  WelcomeCard,
+  StatCard,
+} from '../../components/cards';
 import SideMenu from '../../components/SideMenu';
 
 type CareReceiverDashboardScreenProps = {
@@ -187,6 +191,7 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
 
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -196,74 +201,49 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
             colors={['#8b5cf6']}
           />
         }>
+        {/* Welcome Card */}
+        <View style={{paddingHorizontal: 16, paddingTop: 16}}>
+          <WelcomeCard
+            name={firstName}
+            role="Care Receiver"
+            themeColor="#8b5cf6"
+          />
+        </View>
+
         {/* Stats Cards */}
         <View style={styles.statsSection}>
           <View style={styles.statsRow}>
-            {/* Monthly Appointments Card */}
-            <View style={[styles.statCard, styles.bookingsCard]}>
-              <View style={styles.statHeader}>
-                <View style={[styles.statIcon, styles.bookingsIcon]}>
-                  <Icon name="calendar" size={22} color="#2563eb" />
-                </View>
-                <Text style={styles.statBadge}>This Month</Text>
-              </View>
-              <Text style={styles.statValue}>{dashboardStats.monthlyAppointments}</Text>
-              <Text style={styles.statLabel}>Appointments</Text>
-              <View style={styles.statFooter}>
-                <Icon name="trending-up" size={12} color="#10b981" />
-                <Text style={styles.statTrend}>This month</Text>
-              </View>
-            </View>
-
-            {/* Assigned Caregivers Card */}
-            <View style={[styles.statCard, styles.spentCard]}>
-              <View style={styles.statHeader}>
-                <View style={[styles.statIcon, styles.spentIcon]}>
-                  <Icon name="users" size={22} color="#10b981" />
-                </View>
-                <Text style={styles.statBadgeGreen}>Active</Text>
-              </View>
-              <Text style={styles.statValue}>{dashboardStats.assignedCaregivers}</Text>
-              <Text style={styles.statLabel}>Assigned Caregivers</Text>
-              <View style={styles.statFooter}>
-                <Icon name="check-circle" size={12} color="#10b981" />
-                <Text style={styles.statTrend}>Available now</Text>
-              </View>
-            </View>
+            <StatCard
+              label="Appointments"
+              value={dashboardStats.monthlyAppointments.toString()}
+              icon="calendar"
+              trend="This month"
+              color="#2563eb"
+            />
+            <StatCard
+              label="Caregivers"
+              value={dashboardStats.assignedCaregivers.toString()}
+              icon="users"
+              trend="Active"
+              color="#10b981"
+            />
           </View>
 
           <View style={styles.statsRow}>
-            {/* Monthly Care Hours Card */}
-            <View style={[styles.statCard, styles.hoursCard]}>
-              <View style={styles.statHeader}>
-                <View style={[styles.statIcon, styles.hoursIcon]}>
-                  <Icon name="clock" size={22} color="#8b5cf6" />
-                </View>
-                <Text style={styles.statBadgeGreen}>This Month</Text>
-              </View>
-              <Text style={styles.statValue}>{dashboardStats.monthlyHours}h</Text>
-              <Text style={styles.statLabel}>Care Hours</Text>
-              <View style={styles.statFooter}>
-                <Icon name="clock" size={12} color="#8b5cf6" />
-                <Text style={styles.statTrend}>Completed this month</Text>
-              </View>
-            </View>
-
-            {/* Satisfaction Rate Card */}
-            <View style={[styles.statCard, styles.ratingCard]}>
-              <View style={styles.statHeader}>
-                <View style={[styles.statIcon, styles.ratingIcon]}>
-                  <Icon name="heart" size={22} color="#f59e0b" />
-                </View>
-                <Text style={styles.statBadgeGreen}>Excellent</Text>
-              </View>
-              <Text style={styles.statValue}>{dashboardStats.satisfactionRate}%</Text>
-              <Text style={styles.statLabel}>Satisfaction Rate</Text>
-              <View style={styles.statFooter}>
-                <Icon name="star" size={12} color="#f59e0b" />
-                <Text style={styles.statTrend}>Based on ratings</Text>
-              </View>
-            </View>
+            <StatCard
+              label="Care Hours"
+              value={`${dashboardStats.monthlyHours}h`}
+              icon="clock"
+              trend="This month"
+              color="#8b5cf6"
+            />
+            <StatCard
+              label="Satisfaction"
+              value={`${dashboardStats.satisfactionRate}%`}
+              icon="heart"
+              trend="Excellent"
+              color="#f59e0b"
+            />
           </View>
         </View>
 
@@ -612,100 +592,19 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollViewContent: {
+    paddingBottom: 100, // Space for floating tab bar
+  },
   statsSection: {
     padding: 20,
     paddingBottom: 0,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  bookingsCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#2563eb',
-  },
-  spentCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#10b981',
-  },
-  hoursCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#8b5cf6',
-  },
-  ratingCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
-  },
-  statHeader: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 12,
   },
-  statIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bookingsIcon: {
-    backgroundColor: '#eff6ff',
-  },
-  spentIcon: {
-    backgroundColor: '#f0fdf4',
-  },
-  hoursIcon: {
-    backgroundColor: '#f5f3ff',
-  },
-  ratingIcon: {
-    backgroundColor: '#fef3c7',
-  },
-  statBadge: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#2563eb',
-  },
-  statBadgeGreen: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#10b981',
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 13,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  statFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-  },
-  statTrend: {
-    fontSize: 11,
-    color: '#6b7280',
-  },
+  // Replaced with StatCard
   chartCard: {
     backgroundColor: '#fff',
     borderRadius: 16,

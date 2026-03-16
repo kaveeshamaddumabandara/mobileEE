@@ -29,9 +29,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 
   const loadStoredAuth = async () => {
     try {
-      // Clear stored auth to always show welcome screen (TEMPORARY - REMOVE THIS IN PRODUCTION)
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user');
+      // REMOVED: Forced logout for development
+      // Now users stay logged in between sessions for better UX
       
       const storedToken = await AsyncStorage.getItem('token');
       const storedUser = await AsyncStorage.getItem('user');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -18,8 +18,6 @@ import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {CaregiverTabParamList} from '../../navigation/types';
 import SideMenu from '../../components/SideMenu';
-import api from '../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Booking {
   id: number;
@@ -48,6 +46,20 @@ interface Booking {
   };
 }
 
+interface PendingRequest {
+  id: number;
+  careReceiverName: string;
+  careReceiverImage: string;
+  serviceType: string;
+  requestedDate: Date;
+  startTime: string;
+  endTime: string;
+  location: string;
+  specialNeeds?: string;
+  hourlyRate: number;
+  requestDate: string;
+}
+
 type CaregiverBookingsNavigationProp = NativeStackNavigationProp<
   CaregiverTabParamList,
   'Dashboard'
@@ -58,219 +70,194 @@ const CaregiverBookingsScreen: React.FC = () => {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Pending requests state
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [selectedPendingRequest, setSelectedPendingRequest] = useState<PendingRequest | null>(null);
+  const [pendingRequestDetailsVisible, setPendingRequestDetailsVisible] = useState(false);
+  
+  // Rejection modal state
+  const [rejectionModalVisible, setRejectionModalVisible] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  
+  // Contact modals state
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [messageModalVisible, setMessageModalVisible] = useState(false);
   const [selectedContactBooking, setSelectedContactBooking] = useState<Booking | null>(null);
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [rejectionModalVisible, setRejectionModalVisible] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<any>(null);
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
-  const [loadingRequests, setLoadingRequests] = useState(false);
-  const [pendingRequestDetailsVisible, setPendingRequestDetailsVisible] = useState(false);
-  const [selectedPendingRequest, setSelectedPendingRequest] = useState<any>(null);
-  const [loadingBookings, setLoadingBookings] = useState(false);
 
-  // Initialize bookings state with empty array
-  const [bookings, setBookings] = useState<Booking[]>([]);
-
-  // Fetch bookings from API
-  const fetchBookings = async () => {
-    try {
-      setLoadingBookings(true);
-      const apiBookings = await api.getCaregiverBookings();
-      console.log('Fetched bookings from API:', apiBookings.length);
-      console.log('Bookings statuses:', apiBookings.map((b: any) => ({ id: b._id, status: b.status })));
-      
-      // Transform API data to match component format
-      const transformedBookings = apiBookings.map((booking: any) => ({
-        id: booking._id,
-        careReceiverName: booking.careReceiverId?.name || 'Unknown',
-        careReceiverImage: booking.careReceiverId?.profileImage || 'https://via.placeholder.com/400',
-        serviceType: booking.serviceType,
-        date: new Date(booking.date),
-        startTime: booking.startTime,
-        endTime: booking.endTime,
-        location: booking.location,
-        needs: booking.needs || '',
-        status: booking.status,
-        phoneNumber: booking.careReceiverId?.phone || booking.careReceiverId?.phoneNumber || '',
-        email: booking.careReceiverId?.email || '',
-        careReceiverDetails: {
-          age: booking.careReceiverId?.age || 0,
-          gender: booking.careReceiverId?.gender || '',
-          address: booking.careReceiverId?.address || booking.location,
-          emergencyContact: booking.careReceiverId?.emergencyContact || {
-            name: '',
-            relation: '',
-            phone: '',
-          },
-          medicalHistory: booking.careReceiverId?.medicalHistory || [],
-          biography: booking.careReceiverId?.biography || '',
+  // Mock data
+  const upcomingBookings: Booking[] = [
+    {
+      id: 1,
+      careReceiverName: 'Eleanor Martinez',
+      careReceiverImage: 'https://i.pravatar.cc/150?img=1',
+      serviceType: 'Medical Care',
+      date: new Date(2024, 2, 15),
+      startTime: '09:00 AM',
+      endTime: '05:00 PM',
+      location: '123 Oak Street, Springfield',
+      needs: 'Medication administration, Blood pressure monitoring',
+      status: 'confirmed',
+      phoneNumber: '+1 (555) 123-4567',
+      email: 'eleanor.m@email.com',
+      careReceiverDetails: {
+        age: 78,
+        gender: 'Female',
+        address: '123 Oak Street, Springfield, IL 62701',
+        emergencyContact: {
+          name: 'Sarah Martinez',
+          relation: 'Daughter',
+          phone: '+1 (555) 987-6543',
         },
-      }));
-      
-      console.log('Transformed bookings:', transformedBookings.length);
-      console.log('Completed bookings:', transformedBookings.filter((b: any) => b.status === 'completed').length);
-      setBookings(transformedBookings);
-    } catch (error: any) {
-      console.error('Error fetching bookings:', error);
-      Alert.alert('Error', 'Failed to load bookings. Please try again.');
-      setBookings([]);
-    } finally {
-      setLoadingBookings(false);
-    }
-  };
+        medicalHistory: [
+          'Type 2 Diabetes',
+          'Hypertension',
+          'Osteoarthritis',
+        ],
+        biography: 'Eleanor is a retired teacher who loves gardening and classical music. She requires assistance with daily medication and mobility support.',
+      },
+    },
+    {
+      id: 2,
+      careReceiverName: 'Robert Chen',
+      careReceiverImage: 'https://i.pravatar.cc/150?img=12',
+      serviceType: 'Companionship',
+      date: new Date(2024, 2, 18),
+      startTime: '10:00 AM',
+      endTime: '02:00 PM',
+      location: '456 Maple Avenue, Portland',
+      needs: 'Conversation, Light activities',
+      status: 'confirmed',
+      phoneNumber: '+1 (555) 234-5678',
+      email: 'robert.chen@email.com',
+      careReceiverDetails: {
+        age: 82,
+        gender: 'Male',
+        address: '456 Maple Avenue, Portland, OR 97201',
+        emergencyContact: {
+          name: 'David Chen',
+          relation: 'Son',
+          phone: '+1 (555) 876-5432',
+        },
+        medicalHistory: [
+          'Mild Dementia',
+          'Heart Disease',
+        ],
+        biography: 'Robert enjoys playing chess and sharing stories from his career as an engineer. He benefits from regular social interaction.',
+      },
+    },
+  ];
 
-  // Fetch pending requests from API
+  const completedBookings: Booking[] = [
+    {
+      id: 3,
+      careReceiverName: 'Margaret Wilson',
+      careReceiverImage: 'https://i.pravatar.cc/150?img=5',
+      serviceType: 'Personal Care',
+      date: new Date(2024, 2, 10),
+      startTime: '08:00 AM',
+      endTime: '12:00 PM',
+      location: '789 Pine Road, Seattle',
+      needs: 'Bathing assistance, Dressing',
+      status: 'completed',
+      phoneNumber: '+1 (555) 345-6789',
+      email: 'margaret.w@email.com',
+      careReceiverDetails: {
+        age: 75,
+        gender: 'Female',
+        address: '789 Pine Road, Seattle, WA 98101',
+        emergencyContact: {
+          name: 'Jennifer Wilson',
+          relation: 'Daughter',
+          phone: '+1 (555) 765-4321',
+        },
+        medicalHistory: [
+          'Arthritis',
+          'Limited Mobility',
+        ],
+        biography: 'Margaret is a warm and friendly person who enjoys knitting and watching classic films.',
+      },
+    },
+  ];
+
   useEffect(() => {
-    // Check authentication before fetching
-    const checkAuthAndFetch = async () => {
-      try {
-        const token = await AsyncStorage.getItem('token');
-        const user = await AsyncStorage.getItem('user');
-        
-        if (!token || !user) {
-          console.log('No token or user found');
-          Alert.alert('Authentication Required', 'Please log in to view pending requests');
-          return;
-        }
-        
-        const parsedUser = JSON.parse(user);
-        console.log('User role:', parsedUser.role);
-        
-        if (parsedUser.role !== 'caregiver') {
-          console.log('User is not a caregiver');
-          Alert.alert('Access Denied', 'Only caregivers can view this page');
-          return;
-        }
-        
-        fetchPendingRequests();
-        fetchBookings();
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-      }
-    };
-    
-    checkAuthAndFetch();
+    loadPendingRequests();
   }, []);
 
-  const fetchPendingRequests = async () => {
-    try {
-      setLoadingRequests(true);
-      console.log('Fetching pending requests...');
-      const requests = await api.getPendingRequests();
-      console.log('Received pending requests:', requests);
-      
-      // Transform API data to match component format
-      const transformedRequests = requests.map((request: any) => ({
-        id: request._id,
-        careReceiverName: request.careReceiverId?.name || 'Unknown',
-        careReceiverImage: request.careReceiverId?.profileImage || 'https://via.placeholder.com/400',
-        serviceType: request.serviceType,
-        requestedDate: new Date(request.requestedDate),
-        startTime: request.startTime,
-        endTime: request.endTime,
-        location: request.location,
-        specialNeeds: request.specialNeeds || '',
-        hourlyRate: request.hourlyRate,
-        requestDate: getRelativeTime(request.createdAt),
-        careReceiverId: request.careReceiverId, // Keep full care receiver data
-      }));
-      
-      setPendingRequests(transformedRequests);
-    } catch (error: any) {
-      console.error('Error fetching pending requests:', error);
-      console.error('Error details:', error.response?.data);
-      
-      // Check if it's an authentication error
-      if (error.response?.status === 401) {
-        Alert.alert(
-          'Authentication Error',
-          'Your session has expired. Please log in again.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Navigate to login screen
-                // navigation.reset({
-                //   index: 0,
-                //   routes: [{ name: 'Login' }],
-                // });
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert('Error', 'Failed to load pending requests');
-      }
-    } finally {
+  const loadPendingRequests = async () => {
+    setLoadingRequests(true);
+    // Simulate API call
+    setTimeout(() => {
+      const mockPendingRequests: PendingRequest[] = [
+        {
+          id: 101,
+          careReceiverName: 'Alice Thompson',
+          careReceiverImage: 'https://i.pravatar.cc/150?img=20',
+          serviceType: 'Medical Care',
+          requestedDate: new Date(2024, 2, 20),
+          startTime: '09:00 AM',
+          endTime: '01:00 PM',
+          location: '321 Birch Lane, Boston',
+          specialNeeds: 'Experience with diabetes care required',
+          hourlyRate: 35,
+          requestDate: '2 hours ago',
+        },
+        {
+          id: 102,
+          careReceiverName: 'George Patterson',
+          careReceiverImage: 'https://i.pravatar.cc/150?img=15',
+          serviceType: 'Companionship',
+          requestedDate: new Date(2024, 2, 22),
+          startTime: '02:00 PM',
+          endTime: '06:00 PM',
+          location: '654 Cedar Street, Austin',
+          hourlyRate: 25,
+          requestDate: '5 hours ago',
+        },
+      ];
+      setPendingRequests(mockPendingRequests);
       setLoadingRequests(false);
-    }
+    }, 1000);
   };
 
-  const getRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-    
-    if (diffHours < 1) return 'Just now';
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return date.toLocaleDateString();
-  };
-
-  const upcomingBookings = bookings.filter(
-    b => b.date >= new Date(new Date().setHours(0, 0, 0, 0)) && b.status !== 'completed'
-  ).sort((a, b) => {
-    // Sort pending bookings first, then by date
-    if (a.status === 'pending' && b.status !== 'pending') return -1;
-    if (a.status !== 'pending' && b.status === 'pending') return 1;
-    return a.date.getTime() - b.date.getTime();
-  });
-
-  const completedBookings = bookings.filter(
-    b => b.status === 'completed'
-  ).sort((a, b) => b.date.getTime() - a.date.getTime());
-
-  console.log('Upcoming bookings count:', upcomingBookings.length);
-  console.log('Completed bookings count:', completedBookings.length);
-
-  const handleCall = (phoneNumber: string) => {
-    Linking.openURL(`tel:${phoneNumber}`);
-  };
-
-  const handleEmail = (email: string) => {
-    Linking.openURL(`mailto:${email}`);
-  };
-
-  const openCallModal = (booking: Booking) => {
-    setSelectedContactBooking(booking);
-    setCallModalVisible(true);
-  };
-
-  const openMessageModal = (booking: Booking) => {
-    setSelectedContactBooking(booking);
-    setMessageModalVisible(true);
-  };
-
-  const getDaysInMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  };
-
-  const hasBookingOnDate = (date: Date) => {
-    return upcomingBookings.some(booking => 
-      booking.date.getDate() === date.getDate() &&
-      booking.date.getMonth() === date.getMonth() &&
-      booking.date.getFullYear() === date.getFullYear() &&
-      booking.status === 'confirmed'
+  const handleApproveRequest = (request: PendingRequest) => {
+    Alert.alert(
+      'Approve Request',
+      `Accept booking request from ${request.careReceiverName}?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Approve',
+          onPress: () => {
+            setPendingRequests(prev => prev.filter(r => r.id !== request.id));
+            Alert.alert('Success', 'Booking request approved!');
+          },
+        },
+      ]
     );
+  };
+
+  const handleRejectRequest = (request: PendingRequest) => {
+    setSelectedRequest(request);
+    setRejectionModalVisible(true);
+  };
+
+  const confirmRejection = () => {
+    if (!rejectionReason.trim()) {
+      Alert.alert('Error', 'Please provide a reason for rejection');
+      return;
+    }
+    
+    if (selectedRequest) {
+      setPendingRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
+      setRejectionModalVisible(false);
+      setRejectionReason('');
+      setSelectedRequest(null);
+      Alert.alert('Request Rejected', 'The client has been notified.');
+    }
   };
 
   const goToPreviousMonth = () => {
@@ -281,176 +268,44 @@ const CaregiverBookingsScreen: React.FC = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
-  const handleApproveRequest = (request: any) => {
-    Alert.alert(
-      'Approve Request',
-      `Accept booking request from ${request.careReceiverName}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Approve',
-          style: 'default',
-          onPress: async () => {
-            try {
-              await api.approveBookingRequest(request.id);
-              Alert.alert('Success', 'Request approved successfully!');
-              // Refresh pending requests
-              fetchPendingRequests();
-            } catch (error) {
-              console.error('Error approving request:', error);
-              Alert.alert('Error', 'Failed to approve request. Please try again.');
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleApproveBooking = async (booking: Booking) => {
-    Alert.alert(
-      'Approve Booking',
-      `Confirm this booking with ${booking.careReceiverName}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Approve',
-          style: 'default',
-          onPress: async () => {
-            try {
-              await api.approveBooking(booking.id.toString());
-              Alert.alert('Success', 'Booking has been approved!');
-              // Refresh bookings
-              fetchBookings();
-            } catch (error) {
-              console.error('Error approving booking:', error);
-              Alert.alert('Error', 'Failed to approve booking. Please try again.');
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleRejectBooking = (booking: Booking) => {
-    setSelectedRequest({
-      id: booking.id,
-      careReceiverName: booking.careReceiverName,
-      careReceiverImage: booking.careReceiverImage,
-      serviceType: booking.serviceType,
-    });
-    setRejectionReason('');
-    setRejectionModalVisible(true);
-  };
-
-  const handleRejectRequest = (request: any) => {
-    setSelectedRequest(request);
-    setRejectionReason('');
-    setRejectionModalVisible(true);
-  };
-
-  const handleCompleteBooking = async (booking: Booking) => {
-    Alert.alert(
-      'Complete Booking',
-      `Mark this booking with ${booking.careReceiverName} as completed?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Complete',
-          style: 'default',
-          onPress: async () => {
-            try {
-              await api.completeBooking(booking.id.toString());
-              Alert.alert('Success', 'Booking has been marked as completed!');
-              // Refresh bookings
-              fetchBookings();
-            } catch (error) {
-              console.error('Error completing booking:', error);
-              Alert.alert('Error', 'Failed to complete booking. Please try again.');
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const confirmRejection = async () => {
-    if (!rejectionReason.trim()) {
-      Alert.alert('Required', 'Please provide a reason for rejection');
-      return;
-    }
-
-    try {
-      const isBooking = selectedRequest.serviceType && !selectedRequest.specialNeeds;
-      
-      if (isBooking) {
-        // Rejecting a booking
-        await api.rejectBooking(selectedRequest.id, rejectionReason.trim());
-      } else {
-        // Rejecting a request
-        await api.rejectBookingRequest(selectedRequest.id, rejectionReason.trim());
-      }
-      
-      Alert.alert(
-        'Success',
-        `${isBooking ? 'Booking' : 'Request'} from ${selectedRequest.careReceiverName} has been rejected.`,
-      );
-      setRejectionModalVisible(false);
-      setSelectedRequest(null);
-      setRejectionReason('');
-      
-      // Refresh data
-      fetchPendingRequests();
-      fetchBookings();
-    } catch (error) {
-      console.error('Error rejecting:', error);
-      Alert.alert('Error', 'Failed to reject. Please try again.');
-    }
-  };
-
   const renderCalendar = () => {
-    const daysInMonth = getDaysInMonth(currentDate);
-    const firstDay = getFirstDayOfMonth(currentDate);
-    const days = [];
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
     const today = new Date();
     
-    // Add empty cells for days before the first day of the month
+    const days = [];
+    
+    // Empty cells for days before month starts
     for (let i = 0; i < firstDay; i++) {
       days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
     }
     
-    // Add cells for each day of the month
+    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-      const hasBooking = hasBookingOnDate(date);
-      const isToday = date.getDate() === today.getDate() && 
-                      date.getMonth() === today.getMonth() && 
-                      date.getFullYear() === today.getFullYear();
+      const date = new Date(year, month, day);
+      const isToday = date.toDateString() === today.toDateString();
+      const hasBooking = upcomingBookings.some(
+        b => b.date.toDateString() === date.toDateString()
+      );
       
       days.push(
         <View key={day} style={styles.calendarDay}>
           <View style={[
             styles.calendarDayContent,
             isToday && styles.calendarDayToday,
-            hasBooking && styles.calendarDayBooked
+            hasBooking && styles.calendarDayBooked,
           ]}>
             <Text style={[
               styles.calendarDayText,
               isToday && styles.calendarDayTextToday,
-              hasBooking && styles.calendarDayTextBooked
+              hasBooking && styles.calendarDayTextBooked,
             ]}>
               {day}
             </Text>
+            {hasBooking && <View style={styles.bookingDot} />}
           </View>
-          {hasBooking && <View style={styles.bookingDot} />}
         </View>
       );
     }
@@ -459,14 +314,11 @@ const CaregiverBookingsScreen: React.FC = () => {
   };
 
   const renderBookingCard = (booking: Booking) => (
-    <TouchableOpacity
-      key={booking.id}
-      style={styles.bookingCard}
-      onPress={() => setSelectedBooking(booking)}>
+    <View key={booking.id} style={styles.bookingCard}>
       <View style={styles.bookingHeader}>
         <View style={styles.dateBox}>
           <Text style={styles.dateMonth}>
-            {booking.date.toLocaleDateString('default', { month: 'short' }).toUpperCase()}
+            {booking.date.toLocaleDateString('default', {month: 'short'}).toUpperCase()}
           </Text>
           <Text style={styles.dateDay}>{booking.date.getDate()}</Text>
         </View>
@@ -478,156 +330,117 @@ const CaregiverBookingsScreen: React.FC = () => {
             <Text style={styles.timeText}>
               {booking.startTime} - {booking.endTime}
             </Text>
+            <View style={[styles.statusBadge, styles.confirmedBadge]}>
+              <Text style={[styles.statusText, styles.confirmedText]}>
+                {booking.status}
+              </Text>
+            </View>
           </View>
-        </View>
-        <View style={[styles.statusBadge, 
-          booking.status === 'confirmed' ? styles.confirmedBadge :
-          booking.status === 'pending' ? styles.statusPendingBadge :
-          styles.completedBadge
-        ]}>
-          <Text style={[styles.statusText,
-            booking.status === 'confirmed' ? styles.confirmedText :
-            booking.status === 'pending' ? styles.pendingText :
-            styles.completedText
-          ]}>
-            {booking.status}
-          </Text>
         </View>
       </View>
 
       <View style={styles.locationRow}>
         <Icon name="map-pin" size={14} color="#6b7280" />
-        <Text style={styles.locationText} numberOfLines={1}>{booking.location}</Text>
+        <Text style={styles.locationText}>{booking.location}</Text>
       </View>
 
       {booking.needs && (
         <View style={styles.needsBox}>
-          <Icon name="alert-circle" size={14} color="#f59e0b" />
-          <Text style={styles.needsText} numberOfLines={2}>{booking.needs}</Text>
+          <Icon name="alert-circle" size={16} color="#f59e0b" />
+          <Text style={styles.needsText}>{booking.needs}</Text>
         </View>
       )}
 
-      {booking.status === 'pending' ? (
-        <View style={styles.pendingActionsRow}>
-          <TouchableOpacity
-            style={styles.bookingRejectButton}
-            onPress={() => handleRejectBooking(booking)}>
-            <Icon name="x" size={14} color="#ef4444" />
-            <Text style={styles.bookingRejectText}>Reject</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.bookingApproveButton}
-            onPress={() => handleApproveBooking(booking)}>
-            <Icon name="check" size={14} color="#fff" />
-            <Text style={styles.bookingApproveText}>Approve</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <>
-          <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => openCallModal(booking)}>
-              <Icon name="phone" size={16} color="#8b5cf6" />
-              <Text style={styles.actionButtonText}>Call</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => openMessageModal(booking)}>
-              <Icon name="mail" size={16} color="#8b5cf6" />
-              <Text style={styles.actionButtonText}>Message</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => setSelectedBooking(booking)}>
-              <Icon name="eye" size={16} color="#8b5cf6" />
-              <Text style={styles.actionButtonText}>Details</Text>
-            </TouchableOpacity>
-          </View>
-          {booking.status === 'confirmed' && (
-            <TouchableOpacity
-              style={styles.completeBookingButton}
-              onPress={() => handleCompleteBooking(booking)}>
-              <Icon name="check-circle" size={16} color="#fff" />
-              <Text style={styles.completeBookingText}>Mark as Complete</Text>
-            </TouchableOpacity>
-          )}
-        </>
-      )}
-    </TouchableOpacity>
+      <View style={styles.actionsRow}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => {
+            setSelectedContactBooking(booking);
+            setCallModalVisible(true);
+          }}>
+          <Icon name="phone" size={16} color="#8b5cf6" />
+          <Text style={styles.actionButtonText}>Call</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => {
+            setSelectedContactBooking(booking);
+            setMessageModalVisible(true);
+          }}>
+          <Icon name="mail" size={16} color="#8b5cf6" />
+          <Text style={styles.actionButtonText}>Message</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => setSelectedBooking(booking)}>
+          <Icon name="user" size={16} color="#8b5cf6" />
+          <Text style={styles.actionButtonText}>Details</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 
   const renderCompletedBookingsTable = () => (
-    <View style={styles.tableWrapper}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        nestedScrollEnabled={true}>
-        <View style={styles.tableContainer}>
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, styles.tableDateColumn]}>Date</Text>
-            <Text style={[styles.tableHeaderText, styles.tableClientColumn]}>Client</Text>
-            <Text style={[styles.tableHeaderText, styles.tableServiceColumn]}>Service</Text>
-            <Text style={[styles.tableHeaderText, styles.tableTimeColumn]}>Time</Text>
-            <Text style={[styles.tableHeaderText, styles.tableActionColumn]}>Action</Text>
-          </View>
-
-          {/* Table Rows */}
-          {completedBookings.map((booking) => (
-            <View key={booking.id} style={styles.tableRow}>
-              <View style={styles.tableDateColumn}>
-                <Text style={styles.tableDateText}>
-                  {booking.date.toLocaleDateString('default', { month: 'short', day: 'numeric' })}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      nestedScrollEnabled={true}
+      style={styles.tableWrapper}>
+      <View style={styles.tableContainer}>
+        <View style={styles.tableHeader}>
+          <Text style={[styles.tableHeaderText, styles.tableDateColumn]}>Date</Text>
+          <Text style={[styles.tableHeaderText, styles.tableClientColumn]}>Client</Text>
+          <Text style={[styles.tableHeaderText, styles.tableServiceColumn]}>Service</Text>
+          <Text style={[styles.tableHeaderText, styles.tableTimeColumn]}>Time</Text>
+          <Text style={[styles.tableHeaderText, styles.tableActionColumn]}>Action</Text>
+        </View>
+        {completedBookings.map(booking => (
+          <View key={booking.id} style={styles.tableRow}>
+            <View style={styles.tableDateColumn}>
+              <Text style={styles.tableDateText}>
+                {booking.date.toLocaleDateString('default', {month: 'short', day: 'numeric'})}
+              </Text>
+              <Text style={styles.tableYearText}>{booking.date.getFullYear()}</Text>
+            </View>
+            <View style={styles.tableClientColumn}>
+              <View style={styles.tableClientContent}>
+                <Image source={{uri: booking.careReceiverImage}} style={styles.tableAvatar} />
+                <Text style={styles.tableClientText} numberOfLines={1}>
+                  {booking.careReceiverName}
                 </Text>
-                <Text style={styles.tableYearText}>
-                  {booking.date.getFullYear()}
-                </Text>
-              </View>
-              
-              <View style={styles.tableClientColumn}>
-                <View style={styles.tableClientContent}>
-                  <Image
-                    source={{ uri: booking.careReceiverImage }}
-                    style={styles.tableAvatar}
-                  />
-                  <Text style={styles.tableClientText} numberOfLines={1}>
-                    {booking.careReceiverName}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.tableServiceColumn}>
-                <Text style={styles.tableServiceText} numberOfLines={2}>
-                  {booking.serviceType}
-                </Text>
-              </View>
-              
-              <View style={styles.tableTimeColumn}>
-                <View style={styles.tableTimeContent}>
-                  <Icon name="clock" size={12} color="#6b7280" />
-                  <Text style={styles.tableTimeText}>
-                    {booking.startTime}
-                  </Text>
-                </View>
-                <Text style={styles.tableTimeDuration}>
-                  {booking.endTime}
-                </Text>
-              </View>
-              
-              <View style={styles.tableActionColumn}>
-                <TouchableOpacity
-                  style={styles.tableActionButton}
-                  onPress={() => setSelectedBooking(booking)}>
-                  <Icon name="eye" size={16} color="#8b5cf6" />
-                </TouchableOpacity>
               </View>
             </View>
-          ))}
-        </View>
-      </ScrollView>
-    </View>
+            <View style={styles.tableServiceColumn}>
+              <Text style={styles.tableServiceText}>{booking.serviceType}</Text>
+            </View>
+            <View style={styles.tableTimeColumn}>
+              <View style={styles.tableTimeContent}>
+                <Icon name="clock" size={12} color="#6b7280" />
+                <Text style={styles.tableTimeText}>
+                  {booking.startTime}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.tableActionColumn}>
+              <TouchableOpacity
+                style={styles.tableActionButton}
+                onPress={() => setSelectedBooking(booking)}>
+                <Icon name="eye" size={16} color="#8b5cf6" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
+
+  const handleCall = (phoneNumber: string) => {
+    Linking.openURL(`tel:${phoneNumber}`);
+  };
+
+  const handleEmail = (email: string) => {
+    Linking.openURL(`mailto:${email}`);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -652,201 +465,164 @@ const CaregiverBookingsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Calendar Section */}
-      <View style={styles.calendarContainer}>
-        <View style={styles.calendarHeader}>
-          <TouchableOpacity onPress={goToPreviousMonth} style={styles.calendarNavButton}>
-            <Icon name="chevron-left" size={20} color="#8b5cf6" />
-          </TouchableOpacity>
-          <Text style={styles.calendarMonthText}>
-            {currentDate.toLocaleDateString('default', { month: 'long', year: 'numeric' })}
-          </Text>
-          <TouchableOpacity onPress={goToNextMonth} style={styles.calendarNavButton}>
-            <Icon name="chevron-right" size={20} color="#8b5cf6" />
-          </TouchableOpacity>
-        </View>
+      <ScrollView 
+        style={styles.mainScrollView}
+        contentContainerStyle={styles.mainScrollContent}
+        showsVerticalScrollIndicator={false}>
         
-        <View style={styles.calendarWeekDays}>
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <Text key={day} style={styles.weekDayText}>{day}</Text>
-          ))}
-        </View>
-        
-        <View style={styles.calendarGrid}>
-          {renderCalendar()}
-        </View>
-        
-        <View style={styles.calendarLegend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#8b5cf6' }]} />
-            <Text style={styles.legendText}>Confirmed Bookings</Text>
+        {/* Calendar Section */}
+        <View style={styles.calendarContainer}>
+          <View style={styles.calendarHeader}>
+            <TouchableOpacity onPress={goToPreviousMonth} style={styles.calendarNavButton}>
+              <Icon name="chevron-left" size={20} color="#8b5cf6" />
+            </TouchableOpacity>
+            <Text style={styles.calendarMonthText}>
+              {currentDate.toLocaleDateString('default', {month: 'long', year: 'numeric'})}
+            </Text>
+            <TouchableOpacity onPress={goToNextMonth} style={styles.calendarNavButton}>
+              <Icon name="chevron-right" size={20} color="#8b5cf6" />
+            </TouchableOpacity>
           </View>
-        </View>
-      </View>
-
-      {/* Pending Requests */}
-      {loadingRequests ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8b5cf6" />
-          <Text style={styles.loadingText}>Loading pending requests...</Text>
-        </View>
-      ) : pendingRequests.length > 0 ? (
-        <View style={styles.pendingSection}>
-          <View style={styles.pendingHeader}>
-            <Text style={styles.pendingSectionTitle}>Pending Requests</Text>
-            <View style={styles.pendingBadge}>
-              <Text style={styles.pendingBadgeText}>{pendingRequests.length}</Text>
+          
+          <View style={styles.calendarWeekDays}>
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <Text key={day} style={styles.weekDayText}>{day}</Text>
+            ))}
+          </View>
+          
+          <View style={styles.calendarGrid}>
+            {renderCalendar()}
+          </View>
+          
+          <View style={styles.calendarLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, {backgroundColor: '#8b5cf6'}]} />
+              <Text style={styles.legendText}>Confirmed Bookings</Text>
             </View>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pendingScroll}>
-            {pendingRequests.map(request => (
-              <View key={request.id} style={styles.pendingCard}>
-                <TouchableOpacity 
-                  onPress={() => {
-                    setSelectedPendingRequest(request);
-                    setPendingRequestDetailsVisible(true);
-                  }}
-                  activeOpacity={0.7}>
-                  <View style={styles.pendingCardHeader}>
-                  <Image
-                    source={{ uri: request.careReceiverImage }}
-                    style={styles.pendingAvatar}
-                  />
-                  <View style={styles.pendingClientInfo}>
-                    <Text style={styles.pendingClientName}>{request.careReceiverName}</Text>
-                    <Text style={styles.pendingRequestDate}>{request.requestDate}</Text>
-                  </View>
-                </View>
+        </View>
 
-                <View style={styles.pendingDetails}>
-                  <View style={styles.pendingDetailRow}>
-                    <Icon name="briefcase" size={14} color="#6b7280" />
-                    <Text style={styles.pendingDetailText}>{request.serviceType}</Text>
-                  </View>
-                  <View style={styles.pendingDetailRow}>
-                    <Icon name="calendar" size={14} color="#6b7280" />
-                    <Text style={styles.pendingDetailText}>
-                      {request.requestedDate.toLocaleDateString('default', { month: 'short', day: 'numeric' })}
-                    </Text>
-                  </View>
-                  <View style={styles.pendingDetailRow}>
-                    <Icon name="clock" size={14} color="#6b7280" />
-                    <Text style={styles.pendingDetailText}>
-                      {request.startTime} - {request.endTime}
-                    </Text>
-                  </View>
-                  <View style={styles.pendingDetailRow}>
-                    <Icon name="dollar-sign" size={14} color="#6b7280" />
-                    <Text style={styles.pendingDetailText}>LKR {request.hourlyRate}/hr</Text>
-                  </View>
-                </View>
-
-                {request.specialNeeds && (
-                  <View style={styles.pendingSpecialNeeds}>
-                    <Icon name="alert-circle" size={12} color="#8b5cf6" />
-                    <Text style={styles.pendingSpecialNeedsText} numberOfLines={2}>
-                      {request.specialNeeds}
-                    </Text>
-                  </View>
-                )}
-                </TouchableOpacity>
-
-                <View style={styles.pendingActionsIconRow}>
-                  <TouchableOpacity
-                    style={styles.pendingActionIcon}
-                    onPress={() => {
-                      const phone = request.careReceiverId?.phone || request.careReceiverId?.phoneNumber;
-                      if (phone) handleCall(phone);
-                    }}>
-                    <Icon name="phone" size={16} color="#8b5cf6" />
-                    <Text style={styles.pendingActionIconText}>Call</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.pendingActionIcon}
-                    onPress={() => request.careReceiverId?.email && handleEmail(request.careReceiverId.email)}>
-                    <Icon name="mail" size={16} color="#8b5cf6" />
-                    <Text style={styles.pendingActionIconText}>Message</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.pendingActionIcon}
+        {/* Pending Requests */}
+        {loadingRequests ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#8b5cf6" />
+            <Text style={styles.loadingText}>Loading pending requests...</Text>
+          </View>
+        ) : pendingRequests.length > 0 ? (
+          <View style={styles.pendingSection}>
+            <View style={styles.pendingHeader}>
+              <Text style={styles.pendingSectionTitle}>Pending Requests</Text>
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingBadgeText}>{pendingRequests.length}</Text>
+              </View>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.pendingScroll}>
+              {pendingRequests.map(request => (
+                <View key={request.id} style={styles.pendingCard}>
+                  <TouchableOpacity 
                     onPress={() => {
                       setSelectedPendingRequest(request);
                       setPendingRequestDetailsVisible(true);
-                    }}>
-                    <Icon name="eye" size={16} color="#8b5cf6" />
-                    <Text style={styles.pendingActionIconText}>Details</Text>
-                  </TouchableOpacity>
-                </View>
+                    }}
+                    activeOpacity={0.7}>
+                    <View style={styles.pendingCardHeader}>
+                      <Image
+                        source={{uri: request.careReceiverImage}}
+                        style={styles.pendingAvatar}
+                      />
+                      <View style={styles.pendingClientInfo}>
+                        <Text style={styles.pendingClientName}>{request.careReceiverName}</Text>
+                        <Text style={styles.pendingRequestDate}>{request.requestDate}</Text>
+                      </View>
+                    </View>
 
-                <View style={styles.pendingActions}>
-                  <TouchableOpacity
-                    style={styles.pendingRejectButton}
-                    onPress={() => handleRejectRequest(request)}>
-                    <Icon name="x" size={16} color="#ef4444" />
-                    <Text style={styles.pendingRejectText}>Reject</Text>
+                    <View style={styles.pendingDetails}>
+                      <View style={styles.pendingDetailRow}>
+                        <Icon name="briefcase" size={14} color="#6b7280" />
+                        <Text style={styles.pendingDetailText}>{request.serviceType}</Text>
+                      </View>
+                      <View style={styles.pendingDetailRow}>
+                        <Icon name="calendar" size={14} color="#6b7280" />
+                        <Text style={styles.pendingDetailText}>
+                          {request.requestedDate.toLocaleDateString('default', {month: 'short', day: 'numeric'})}
+                        </Text>
+                      </View>
+                      <View style={styles.pendingDetailRow}>
+                        <Icon name="clock" size={14} color="#6b7280" />
+                        <Text style={styles.pendingDetailText}>
+                          {request.startTime} - {request.endTime}
+                        </Text>
+                      </View>
+                    </View>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.pendingApproveButton}
-                    onPress={() => handleApproveRequest(request)}>
-                    <Icon name="check" size={16} color="#fff" />
-                    <Text style={styles.pendingApproveText}>Approve</Text>
-                  </TouchableOpacity>
+
+                  <View style={styles.pendingActions}>
+                    <TouchableOpacity
+                      style={styles.pendingRejectButton}
+                      onPress={() => handleRejectRequest(request)}>
+                      <Icon name="x" size={16} color="#ef4444" />
+                      <Text style={styles.pendingRejectText}>Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.pendingApproveButton}
+                      onPress={() => handleApproveRequest(request)}>
+                      <Icon name="check" size={16} color="#fff" />
+                      <Text style={styles.pendingApproveText}>Approve</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            ))}
-          </ScrollView>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'upcoming' && styles.activeTab]}
+            onPress={() => setActiveTab('upcoming')}>
+            <Icon name="calendar" size={18} color={activeTab === 'upcoming' ? '#8b5cf6' : '#6b7280'} />
+            <Text style={[styles.tabText, activeTab === 'upcoming' && styles.activeTabText]}>
+              Upcoming ({upcomingBookings.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
+            onPress={() => setActiveTab('completed')}>
+            <Icon name="check-circle" size={18} color={activeTab === 'completed' ? '#8b5cf6' : '#6b7280'} />
+            <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
+              Completed ({completedBookings.length})
+            </Text>
+          </TouchableOpacity>
         </View>
-      ) : null}
 
-      {/* Tabs */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'upcoming' && styles.activeTab]}
-          onPress={() => setActiveTab('upcoming')}>
-          <Icon name="calendar" size={18} color={activeTab === 'upcoming' ? '#8b5cf6' : '#6b7280'} />
-          <Text style={[styles.tabText, activeTab === 'upcoming' && styles.activeTabText]}>
-            Upcoming ({upcomingBookings.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
-          onPress={() => setActiveTab('completed')}>
-          <Icon name="check-circle" size={18} color={activeTab === 'completed' ? '#8b5cf6' : '#6b7280'} />
-          <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
-            Completed ({completedBookings.length})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Bookings List */}
-      <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}
-        nestedScrollEnabled={true}>
-        {activeTab === 'upcoming' ? (
-          upcomingBookings.length > 0 ? (
-            upcomingBookings.map(renderBookingCard)
+        {/* Bookings List Content */}
+        <View style={styles.bookingsListContainer}>
+          {activeTab === 'upcoming' ? (
+            upcomingBookings.length > 0 ? (
+              upcomingBookings.map(renderBookingCard)
+            ) : (
+              <View style={styles.emptyState}>
+                <Icon name="calendar" size={64} color="#d1d5db" />
+                <Text style={styles.emptyStateTitle}>No Upcoming Bookings</Text>
+                <Text style={styles.emptyStateText}>You don't have any scheduled appointments</Text>
+              </View>
+            )
           ) : (
-            <View style={styles.emptyState}>
-              <Icon name="calendar" size={64} color="#d1d5db" />
-              <Text style={styles.emptyStateTitle}>No Upcoming Bookings</Text>
-              <Text style={styles.emptyStateText}>You don't have any scheduled appointments</Text>
-            </View>
-          )
-        ) : (
-          completedBookings.length > 0 ? (
-            renderCompletedBookingsTable()
-          ) : (
-            <View style={styles.emptyState}>
-              <Icon name="check-circle" size={64} color="#d1d5db" />
-              <Text style={styles.emptyStateTitle}>No Completed Bookings</Text>
-              <Text style={styles.emptyStateText}>Your completed appointments will appear here</Text>
-            </View>
-          )
-        )}
+            completedBookings.length > 0 ? (
+              renderCompletedBookingsTable()
+            ) : (
+              <View style={styles.emptyState}>
+                <Icon name="check-circle" size={64} color="#d1d5db" />
+                <Text style={styles.emptyStateTitle}>No Completed Bookings</Text>
+                <Text style={styles.emptyStateText}>Your completed appointments will appear here</Text>
+              </View>
+            )
+          )}
+        </View>
       </ScrollView>
 
       {/* Booking Details Modal */}
@@ -870,7 +646,7 @@ const CaregiverBookingsScreen: React.FC = () => {
                   {/* Profile Section */}
                   <View style={styles.profileSection}>
                     <Image
-                      source={{ uri: selectedBooking.careReceiverImage }}
+                      source={{uri: selectedBooking.careReceiverImage}}
                       style={styles.profileImage}
                     />
                     <View style={styles.profileInfo}>
@@ -986,7 +762,7 @@ const CaregiverBookingsScreen: React.FC = () => {
               <>
                 <View style={styles.contactDetailsBox}>
                   <Image
-                    source={{ uri: selectedContactBooking.careReceiverImage }}
+                    source={{uri: selectedContactBooking.careReceiverImage}}
                     style={styles.contactModalImage}
                   />
                   <Text style={styles.contactModalName}>
@@ -1067,7 +843,7 @@ const CaregiverBookingsScreen: React.FC = () => {
               <>
                 <View style={styles.contactDetailsBox}>
                   <Image
-                    source={{ uri: selectedContactBooking.careReceiverImage }}
+                    source={{uri: selectedContactBooking.careReceiverImage}}
                     style={styles.contactModalImage}
                   />
                   <Text style={styles.contactModalName}>
@@ -1100,7 +876,7 @@ const CaregiverBookingsScreen: React.FC = () => {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.primaryActionButton, { backgroundColor: '#10b981', marginTop: 12 }]}
+                    style={[styles.primaryActionButton, {backgroundColor: '#10b981', marginTop: 12}]}
                     onPress={() => {
                       setMessageModalVisible(false);
                       Linking.openURL(`sms:${selectedContactBooking.phoneNumber}`);
@@ -1112,7 +888,7 @@ const CaregiverBookingsScreen: React.FC = () => {
                   <View style={styles.messageInfoBox}>
                     <Icon name="info" size={16} color="#6b7280" />
                     <Text style={styles.messageInfoText}>
-                      Booking on {selectedContactBooking.date.toLocaleDateString('default', { month: 'short', day: 'numeric' })} at {selectedContactBooking.startTime}
+                      Booking on {selectedContactBooking.date.toLocaleDateString('default', {month: 'short', day: 'numeric'})} at {selectedContactBooking.startTime}
                     </Text>
                   </View>
                 </View>
@@ -1143,7 +919,7 @@ const CaregiverBookingsScreen: React.FC = () => {
               <View style={styles.rejectionModalBody}>
                 <View style={styles.rejectionClientInfo}>
                   <Image
-                    source={{ uri: selectedRequest.careReceiverImage }}
+                    source={{uri: selectedRequest.careReceiverImage}}
                     style={styles.rejectionClientAvatar}
                   />
                   <View>
@@ -1211,7 +987,7 @@ const CaregiverBookingsScreen: React.FC = () => {
                   {/* Profile Section */}
                   <View style={styles.profileSection}>
                     <Image
-                      source={{ uri: selectedPendingRequest.careReceiverImage }}
+                      source={{uri: selectedPendingRequest.careReceiverImage}}
                       style={styles.profileImage}
                     />
                     <View style={styles.profileInfo}>
@@ -1346,6 +1122,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f9fafb',
   },
+  mainScrollView: {
+    flex: 1,
+  },
+  mainScrollContent: {
+    paddingBottom: 150,
+  },
+  bookingsListContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1354,7 +1140,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#fff',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 3,
@@ -1412,19 +1198,13 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: '#8b5cf6',
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
   bookingCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 3,
@@ -1487,12 +1267,6 @@ const styles = StyleSheet.create({
   confirmedBadge: {
     backgroundColor: '#d1fae5',
   },
-  statusPendingBadge: {
-    backgroundColor: '#fef3c7',
-  },
-  completedBadge: {
-    backgroundColor: '#e5e7eb',
-  },
   statusText: {
     fontSize: 11,
     fontWeight: '600',
@@ -1500,12 +1274,6 @@ const styles = StyleSheet.create({
   },
   confirmedText: {
     color: '#10b981',
-  },
-  pendingText: {
-    color: '#f59e0b',
-  },
-  completedText: {
-    color: '#6b7280',
   },
   locationRow: {
     flexDirection: 'row',
@@ -2079,48 +1847,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#374151',
   },
-  pendingSpecialNeeds: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    backgroundColor: '#f3e8ff',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e9d5ff',
-  },
-  pendingSpecialNeedsText: {
-    fontSize: 12,
-    color: '#6b21a8',
-    flex: 1,
-    lineHeight: 16,
-  },
-  pendingActionsIconRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingTop: 12,
-    marginBottom: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e9d5ff',
-  },
-  pendingActionIcon: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e9d5ff',
-  },
-  pendingActionIconText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8b5cf6',
-  },
   pendingActions: {
     flexDirection: 'row',
     gap: 8,
@@ -2278,45 +2004,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  pendingActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  bookingRejectButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-  bookingRejectText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#ef4444',
-  },
-  bookingApproveButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#10b981',
-  },
-  bookingApproveText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#fff',
-  },
   tableWrapper: {
     flex: 1,
   },
@@ -2405,11 +2092,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#374151',
-  },
-  tableTimeDuration: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginTop: 2,
   },
   tableActionColumn: {
     width: 60,
@@ -2513,21 +2195,6 @@ const styles = StyleSheet.create({
   },
   modalApproveText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  completeBookingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#10b981',
-    marginTop: 8,
-  },
-  completeBookingText: {
-    fontSize: 14,
     fontWeight: '600',
     color: '#fff',
   },

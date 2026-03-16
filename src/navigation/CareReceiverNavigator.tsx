@@ -1,14 +1,12 @@
 import React from 'react';
-import {Text} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {CareReceiverTabParamList} from './types';
+import Icon from 'react-native-vector-icons/Feather';
 
 // Import screens
 import CareReceiverDashboardScreen from '../screens/carereceiver/CareReceiverDashboardScreen';
 import CareReceiverProfileScreen from '../screens/carereceiver/CareReceiverProfileScreen';
 import CareReceiverBookingsScreen from '../screens/carereceiver/CareReceiverBookingsScreen';
-// @ts-ignore - Module exists but TypeScript cache issue
-import ContactUsScreen from '../screens/common/ContactUsScreen';
 
 const Tab = createBottomTabNavigator<CareReceiverTabParamList>();
 
@@ -16,15 +14,40 @@ const CareReceiverNavigator: React.FC = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerShown: true,
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#94a3b8',
+        headerShown: false,
+        tabBarActiveTintColor: '#2563EB', // Blue 600
+        tabBarInactiveTintColor: '#9CA3AF', // Gray 400
         tabBarStyle: {
-          display: 'none',
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          right: 20,
+          elevation: 8,
+          backgroundColor: '#FFFFFF',
+          borderRadius: 20,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
+          shadowColor: '#000',
+          shadowOffset: {
+            width: 0,
+            height: 4,
+          },
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          borderWidth: 0,
+          borderTopWidth: 0,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '500',
+          fontWeight: '600',
+          marginTop: 4,
+        },
+        tabBarIconStyle: {
+          marginTop: 5,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 5,
         },
       }}>
       <Tab.Screen
@@ -33,7 +56,14 @@ const CareReceiverNavigator: React.FC = () => {
         options={{
           title: 'Dashboard',
           tabBarLabel: 'Home',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>🏠</Text>,
+          tabBarIcon: ({color}) => (
+            <Icon 
+              name="home" 
+              size={24} 
+              color={color}
+              style={{marginBottom: -3}}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -42,25 +72,30 @@ const CareReceiverNavigator: React.FC = () => {
         options={{
           title: 'Find Caregivers',
           tabBarLabel: 'Find Care',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>🔍</Text>,
+          tabBarIcon: ({color}) => (
+            <Icon 
+              name="search" 
+              size={24} 
+              color={color}
+              style={{marginBottom: -3}}
+            />
+          ),
         }}
       />
       <Tab.Screen
         name="Bookings"
         component={CareReceiverBookingsScreen}
         options={{
-          title: 'Find Caregivers',
+          title: 'My Bookings',
           tabBarLabel: 'Bookings',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📅</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="Payments"
-        component={CareReceiverDashboardScreen}
-        options={{
-          title: 'Payments',
-          tabBarLabel: 'Payments',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>💳</Text>,
+          tabBarIcon: ({color}) => (
+            <Icon 
+              name="calendar" 
+              size={24} 
+              color={color}
+              style={{marginBottom: -3}}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -68,17 +103,15 @@ const CareReceiverNavigator: React.FC = () => {
         component={CareReceiverProfileScreen}
         options={{
           title: 'Profile',
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>👤</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="ContactUs"
-        component={ContactUsScreen}
-        options={{
-          title: 'Contact Us',
-          tabBarLabel: 'Contact',
-          tabBarIcon: ({color}) => <Text style={{fontSize: 24}}>📞</Text>,
+          tabBarLabel: 'Me',
+          tabBarIcon: ({color}) => (
+            <Icon 
+              name="user" 
+              size={24} 
+              color={color}
+              style={{marginBottom: -3}}
+            />
+          ),
         }}
       />
     </Tab.Navigator>

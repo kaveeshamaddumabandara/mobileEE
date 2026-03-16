@@ -827,6 +827,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9fafb',
+    paddingBottom: 100, // Space for floating tab bar
   },
   loadingContainer: {
     flex: 1,

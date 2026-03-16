@@ -8,7 +8,6 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
   Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -28,7 +27,7 @@ type CaregiverProfileScreenNavigationProp = NativeStackNavigationProp<
 
 const CaregiverProfileScreen: React.FC = () => {
   const navigation = useNavigation<CaregiverProfileScreenNavigationProp>();
-  const {user, updateUser, logout} = useAuth();
+  const {user, updateUser} = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState<Partial<Caregiver>>({
     name: user?.name || '',
@@ -47,8 +46,6 @@ const CaregiverProfileScreen: React.FC = () => {
   const [certifications, setCertifications] = useState('');
   const [address, setAddress] = useState('');
   const [availability, setAvailability] = useState('');
-  const [hasTransportation, setHasTransportation] = useState(false);
-  const [travelRadius, setTravelRadius] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
 
@@ -88,8 +85,6 @@ const CaregiverProfileScreen: React.FC = () => {
         setAddress(userAddress || '');
       }
       setAvailability(data.availabilityType || '');
-      setHasTransportation(data.hasTransportation || false);
-      setTravelRadius(data.travelRadius || '');
       setProfileImage(data.profileImage || user?.profileImage || null);
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -242,12 +237,7 @@ const CaregiverProfileScreen: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      {text: 'Cancel', style: 'cancel'},
-      {text: 'Logout', style: 'destructive', onPress: logout},
-    ]);
-  };
+  
 
   return (
     <SafeAreaView style={styles.container}>
@@ -375,7 +365,7 @@ const CaregiverProfileScreen: React.FC = () => {
                 style={styles.input}
                 value={profile.experience?.toString() || ''}
                 onChangeText={text =>
-                  setProfile({...profile, experience: parseInt(text) || 0})
+                  setProfile({...profile, experience: parseInt(text, 10) || 0})
                 }
                 placeholder="Years of experience"
                 keyboardType="numeric"
@@ -552,6 +542,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9fafb',
+    paddingBottom: 100, // Space for floating tab bar
   },
   header: {
     flexDirection: 'row',

@@ -1,4 +1,5 @@
 export type AuthStackParamList = {
+  Onboarding: undefined;
   Welcome: undefined;
   Login: undefined;
   CaregiverRegister: undefined;
@@ -16,21 +17,16 @@ export type AppStackParamList = {
 
 export type CaregiverTabParamList = {
   Dashboard: undefined;
-  Profile: undefined;
   Bookings: undefined;
-  Requests: undefined;
-  Payments: undefined;
   CareDocumentation: undefined;
-  ContactUs: undefined;
+  Profile: undefined;
 };
 
 export type CareReceiverTabParamList = {
   Dashboard: undefined;
-  Profile: undefined;
   FindCaregivers: undefined;
   Bookings: undefined;
-  Payments: undefined;
-  ContactUs: undefined;
+  Profile: undefined;
 };
 
 export type RootStackParamList = {

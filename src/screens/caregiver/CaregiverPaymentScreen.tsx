@@ -18,11 +18,11 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {CaregiverTabParamList} from '../../navigation/types';
 import SideMenu from '../../components/SideMenu';
 import api from '../../services/api';
-import {LineChart, BarChart, PieChart} from 'react-native-chart-kit';
+import {LineChart, PieChart} from 'react-native-chart-kit';
 
 type PaymentNavigationProp = NativeStackNavigationProp<
   CaregiverTabParamList,
-  'Payments'
+  'Dashboard'
 >;
 
 const CaregiverPaymentScreen: React.FC = () => {
