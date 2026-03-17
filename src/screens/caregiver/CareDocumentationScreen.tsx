@@ -24,7 +24,7 @@ type CareDocumentationNavigationProp = NativeStackNavigationProp<
 >;
 
 interface Booking {
-  id: number;
+  _id: string;
   careReceiverName: string;
   serviceType: string;
   date: Date;
@@ -40,23 +40,24 @@ interface TodoItem {
   priority: 'low' | 'medium' | 'high';
 }
 
-interface CareDocumentation {
-  bookingId: number;
-  servicesProvided: string[];
-  vitalSigns: {
-    bloodPressure: string;
-    temperature: string;
-    heartRate: string;
-    oxygenLevel: string;
-  };
-  medicationAdministered: string[];
-  mealsProvided: string[];
-  activitiesPerformed: string[];
-  behavioralObservations: string;
-  incidents: string;
-  notes: string;
-  timestamp: Date;
-}
+// TODO: Consider using this interface for typed documentation state
+// interface CareDocumentation {
+//   bookingId: string;
+//   servicesProvided: string[];
+//   vitalSigns: {
+//     bloodPressure: string;
+//     temperature: string;
+//     heartRate: string;
+//     oxygenLevel: string;
+//   };
+//   medicationAdministered: string[];
+//   mealsProvided: string[];
+//   activitiesPerformed: string[];
+//   behavioralObservations: string;
+//   incidents: string;
+//   notes: string;
+//   timestamp: Date;
+// }
 
 const CareDocumentationScreen: React.FC = () => {
   const navigation = useNavigation<CareDocumentationNavigationProp>();
@@ -98,7 +99,7 @@ const CareDocumentationScreen: React.FC = () => {
       
       // Transform API data to match component format
       const transformedBookings = apiBookings.map((booking: any) => ({
-        id: booking._id,
+        _id: booking._id,
         careReceiverName: booking.careReceiverId?.name || 'Unknown',
         serviceType: booking.serviceType,
         date: new Date(booking.date),
@@ -121,13 +122,13 @@ const CareDocumentationScreen: React.FC = () => {
     setSelectedBooking(booking);
     setActiveView('documentation');
     // Load existing documentation if available
-    loadDocumentation(booking.id);
-    loadTodoList(booking.id);
+    loadDocumentation(booking._id);
+    loadTodoList(booking._id);
   };
 
-  const loadDocumentation = async (bookingId: number) => {
+  const loadDocumentation = async (bookingId: string) => {
     try {
-      const documentation = await api.getDocumentationByBooking(bookingId.toString());
+      const documentation = await api.getDocumentationByBooking(bookingId);
       
       // Populate form with existing documentation
       if (documentation) {
@@ -170,9 +171,9 @@ const CareDocumentationScreen: React.FC = () => {
     setNotes('');
   };
 
-  const loadTodoList = async (bookingId: number) => {
+  const loadTodoList = async (bookingId: string) => {
     try {
-      const todos = await api.getTodoList(bookingId.toString());
+      const todos = await api.getTodoList(bookingId);
       
       // Transform API data to component format
       const transformedTodos = todos.map((todo: any) => ({
@@ -212,7 +213,7 @@ const CareDocumentationScreen: React.FC = () => {
       };
 
       await api.createOrUpdateDocumentation(
-        selectedBooking.id.toString(),
+        selectedBooking._id,
         documentationData,
       );
       
@@ -288,13 +289,13 @@ const CareDocumentationScreen: React.FC = () => {
     if (!newTodoText.trim() || !selectedBooking) return;
 
     try {
-      await api.addTodoItem(selectedBooking.id.toString(), {
+      await api.addTodoItem(selectedBooking._id, {
         text: newTodoText.trim(),
         priority: newTodoPriority,
       });
 
       // Reload todo list
-      await loadTodoList(selectedBooking.id);
+      await loadTodoList(selectedBooking._id);
       
       setNewTodoText('');
       setNewTodoPriority('medium');
@@ -312,7 +313,7 @@ const CareDocumentationScreen: React.FC = () => {
       const todo = todoItems.find(item => item.id === id);
       if (!todo) return;
 
-      await api.updateTodoItem(selectedBooking.id.toString(), id, {
+      await api.updateTodoItem(selectedBooking._id, id, {
         completed: !todo.completed,
       });
 
@@ -332,7 +333,7 @@ const CareDocumentationScreen: React.FC = () => {
     if (!selectedBooking) return;
 
     try {
-      await api.deleteTodoItem(selectedBooking.id.toString(), id);
+      await api.deleteTodoItem(selectedBooking._id, id);
 
       // Update local state
       setTodoItems(todoItems.filter(item => item.id !== id));
@@ -355,7 +356,7 @@ const CareDocumentationScreen: React.FC = () => {
           {bookings.length > 0 ? (
             bookings.map(booking => (
               <TouchableOpacity
-                key={booking.id}
+                key={booking._id}
                 style={styles.bookingCard}
                 onPress={() => handleBookingSelect(booking)}>
                 <View style={styles.bookingCardHeader}>

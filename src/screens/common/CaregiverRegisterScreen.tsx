@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Image,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {AuthStackParamList} from '../../navigation/types';
@@ -267,7 +268,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         city: formData.city,
         state: formData.state,
         zipCode: formData.zipCode,
-        yearsOfExperience: parseInt(formData.yearsOfExperience),
+        yearsOfExperience: parseInt(formData.yearsOfExperience, 10),
         specializations: formData.specializations,
         certifications: formData.certifications,
         education: formData.education,
@@ -280,7 +281,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
       };
 
       // Call the registration API
-      const response = await ApiService.register(registrationData);
+      await ApiService.register(registrationData);
       
       setLoading(false);
       
@@ -402,8 +403,15 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}>
-        {/* Title */}
+        {/* Logo and Title */}
         <View style={styles.titleSection}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../public/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={styles.title}>Join as a Caregiver</Text>
           <Text style={styles.subtitle}>Create your professional profile</Text>
         </View>
@@ -491,7 +499,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
                 />
               </View>
               <View style={styles.thirdInput}>
-                <Text style={styles.label}>Postal Code *</Text>
+                <Text style={styles.label}>Postal Code*</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.zipCode}
@@ -515,7 +523,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
               style={styles.input}
               value={formData.email}
               onChangeText={value => handleChange('email', value)}
-              placeholder="john.doe@email.com"
+              placeholder="name@gmail.com"
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -905,6 +913,26 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderLeftWidth: 4,
     borderLeftColor: '#9333ea',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#9333ea',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    padding: 8,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   title: {
     fontSize: 32,

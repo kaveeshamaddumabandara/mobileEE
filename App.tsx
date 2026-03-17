@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import {StatusBar} from 'react-native';
+import {StatusBar, StyleSheet} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {AuthProvider} from './src/context/AuthContext';
@@ -14,15 +14,21 @@ import RootNavigator from './src/navigation/RootNavigator';
 
 function App(): React.JSX.Element {
   return (
-    <GestureHandlerRootView style={{flex: 1}}>
+    <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <AuthProvider>
+          <StatusBar barStyle="light-content" backgroundColor="#1D4ED8" />
           <RootNavigator />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
 
 export default App;

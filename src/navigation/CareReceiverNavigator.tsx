@@ -1,4 +1,5 @@
 import React from 'react';
+import {Platform} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {CareReceiverTabParamList} from './types';
 import Icon from 'react-native-vector-icons/Feather';
@@ -10,109 +11,81 @@ import CareReceiverBookingsScreen from '../screens/carereceiver/CareReceiverBook
 
 const Tab = createBottomTabNavigator<CareReceiverTabParamList>();
 
+// Extract tabBarIcon functions to avoid nested components
+const HomeTabIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="home" size={size} color={color} />
+);
+
+const SearchTabIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="search" size={size} color={color} />
+);
+
+const UserTabIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="user" size={size} color={color} />
+);
+
+const dashboardOptions = {
+  tabBarLabel: 'Home',
+  tabBarIcon: HomeTabIcon,
+};
+
+const findCaregiversOptions = {
+  tabBarLabel: 'Find & Book',
+  tabBarIcon: SearchTabIcon,
+};
+
+const profileOptions = {
+  tabBarLabel: 'Profile',
+  tabBarIcon: UserTabIcon,
+};
+
 const CareReceiverNavigator: React.FC = () => {
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#2563EB', // Blue 600
+        tabBarActiveTintColor: '#1D4ED8', // Blue 700
         tabBarInactiveTintColor: '#9CA3AF', // Gray 400
         tabBarStyle: {
-          position: 'absolute',
-          bottom: 20,
-          left: 20,
-          right: 20,
-          elevation: 8,
           backgroundColor: '#FFFFFF',
-          borderRadius: 20,
-          height: 70,
-          paddingBottom: 10,
+          height: Platform.OS === 'ios' ? 88 : 65,
           paddingTop: 10,
+          paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+          borderTopWidth: 1,
+          borderTopColor: '#F3F4F6',
+          elevation: 0,
           shadowColor: '#000',
           shadowOffset: {
             width: 0,
-            height: 4,
+            height: -2,
           },
-          shadowOpacity: 0.15,
-          shadowRadius: 8,
-          borderWidth: 0,
-          borderTopWidth: 0,
+          shadowOpacity: 0.05,
+          shadowRadius: 3,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
-          marginTop: 4,
+          marginBottom: Platform.OS === 'ios' ? 0 : 5,
         },
         tabBarIconStyle: {
-          marginTop: 5,
-        },
-        tabBarItemStyle: {
-          paddingVertical: 5,
+          marginBottom: 0,
         },
       }}>
       <Tab.Screen
         name="Dashboard"
         component={CareReceiverDashboardScreen}
-        options={{
-          title: 'Dashboard',
-          tabBarLabel: 'Home',
-          tabBarIcon: ({color}) => (
-            <Icon 
-              name="home" 
-              size={24} 
-              color={color}
-              style={{marginBottom: -3}}
-            />
-          ),
-        }}
+        options={dashboardOptions}
       />
       <Tab.Screen
         name="FindCaregivers"
-        component={CareReceiverDashboardScreen}
-        options={{
-          title: 'Find Caregivers',
-          tabBarLabel: 'Find Care',
-          tabBarIcon: ({color}) => (
-            <Icon 
-              name="search" 
-              size={24} 
-              color={color}
-              style={{marginBottom: -3}}
-            />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Bookings"
         component={CareReceiverBookingsScreen}
-        options={{
-          title: 'My Bookings',
-          tabBarLabel: 'Bookings',
-          tabBarIcon: ({color}) => (
-            <Icon 
-              name="calendar" 
-              size={24} 
-              color={color}
-              style={{marginBottom: -3}}
-            />
-          ),
-        }}
+        options={findCaregiversOptions}
       />
+      
       <Tab.Screen
         name="Profile"
         component={CareReceiverProfileScreen}
-        options={{
-          title: 'Profile',
-          tabBarLabel: 'Me',
-          tabBarIcon: ({color}) => (
-            <Icon 
-              name="user" 
-              size={24} 
-              color={color}
-              style={{marginBottom: -3}}
-            />
-          ),
-        }}
+        options={profileOptions}
       />
     </Tab.Navigator>
   );

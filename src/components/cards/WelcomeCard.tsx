@@ -1,6 +1,5 @@
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import {View, Text, StyleSheet} from 'react-native';
 
 interface WelcomeCardProps {
   name: string;

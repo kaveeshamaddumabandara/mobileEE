@@ -29,7 +29,7 @@ type CareReceiverProfileScreenNavigationProp = NativeStackNavigationProp<
 
 const CareReceiverProfileScreen: React.FC = () => {
   const navigation = useNavigation<CareReceiverProfileScreenNavigationProp>();
-  const {user, updateUser, logout} = useAuth();
+  const {user, updateUser} = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState<Partial<CareReceiver> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,11 +38,7 @@ const CareReceiverProfileScreen: React.FC = () => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [conditionInput, setConditionInput] = useState('');
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
+  const loadProfile = React.useCallback(async () => {
     try {
       setLoading(true);
       const data = (await ApiService.getProfile()) as CareReceiver;
@@ -56,7 +52,11 @@ const CareReceiverProfileScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.profileImage]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -196,13 +196,6 @@ const CareReceiverProfileScreen: React.FC = () => {
     } else {
       setIsEditing(true);
     }
-  };
-
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      {text: 'Cancel', style: 'cancel'},
-      {text: 'Logout', style: 'destructive', onPress: logout},
-    ]);
   };
 
   if (loading) {

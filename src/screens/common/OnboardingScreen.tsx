@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  Image,
 } from 'react-native';
 import Swiper from 'react-native-swiper';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -89,14 +90,26 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation}) => {
 
   const renderSlide = (slide: Slide) => {
     const isLastSlide = slide.id === slides.length;
+    const isFirstSlide = slide.id === 1;
 
     return (
       <View style={styles.slide} key={slide.id}>
         <SafeAreaView style={styles.safeArea}>
           {/* Icon Container */}
           <View style={styles.iconWrapper}>
-            <View style={[styles.iconContainer, {backgroundColor: slide.backgroundColor}]}>
-              <Icon name={slide.icon} size={80} color={slide.color} />
+            <View style={[
+              styles.iconContainer,
+              isFirstSlide ? styles.firstSlideIconContainer : {backgroundColor: slide.backgroundColor}
+            ]}>
+              {isFirstSlide ? (
+                <Image
+                  source={require('../../public/logo.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Icon name={slide.icon} size={80} color={slide.color} />
+              )}
             </View>
           </View>
 
@@ -173,146 +186,100 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  skipButton: {
-    position: 'absolute',
-    top: 50,
-    right: 24,
-    zIndex: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 20,
-  },
-  skipButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
   slide: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-  iconWrapper: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 60,
+    paddingHorizontal: 20,
   },
-  iconContainer: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    justifyContent: 'center',
+  slideContent: {
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    maxWidth: 300,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#1F2937',
     textAlign: 'center',
     marginBottom: 16,
-    lineHeight: 40,
   },
   description: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 26,
-    paddingHorizontal: 8,
+    lineHeight: 24,
+    marginBottom: 40,
   },
-  bottomContainer: {
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  nextButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 30,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  nextButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  getStartedButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 56,
-    borderRadius: 30,
-    gap: 10,
-    width: '100%',
-    maxWidth: 320,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-    marginBottom: 16,
-  },
-  getStartedButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  signInButton: {
-    paddingVertical: 12,
-  },
-  signInButtonText: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
+  image: {
+    width: 200,
+    height: 200,
+    marginBottom: 40,
   },
   pagination: {
-    bottom: 140,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 40,
   },
   dot: {
-    backgroundColor: '#D1D5DB',
     width: 8,
     height: 8,
     borderRadius: 4,
     marginHorizontal: 4,
   },
   activeDot: {
-    backgroundColor: '#111827',
-    width: 24,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
+    backgroundColor: '#3B82F6',
+  },
+  inactiveDot: {
+    backgroundColor: '#D1D5DB',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  skipButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  skipButtonText: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  nextButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+  },
+  nextButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  getStartedButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    alignSelf: 'center',
+  },
+  getStartedButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  slideBackgroundFirst: {
+    backgroundColor: '#ffffff',
+  },
+  slideBackgroundDynamic: {
+    // Dynamic background will be set inline
   },
 });
 

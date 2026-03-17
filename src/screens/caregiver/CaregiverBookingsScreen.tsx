@@ -18,9 +18,10 @@ import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {CaregiverTabParamList} from '../../navigation/types';
 import SideMenu from '../../components/SideMenu';
+import ApiService from '../../services/api';
 
 interface Booking {
-  id: number;
+  _id: string;
   careReceiverName: string;
   careReceiverImage: string;
   serviceType: string;
@@ -29,9 +30,29 @@ interface Booking {
   endTime: string;
   location: string;
   needs: string;
-  status: 'confirmed' | 'pending' | 'completed';
+  status: 'confirmed' | 'pending' | 'completed' | 'cancelled';
   phoneNumber: string;
   email: string;
+  hourlyRate: number;
+  createdAt: string;
+  careReceiverId?: {
+    _id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    phoneNumber?: string;
+    profileImage?: string;
+    age?: number;
+    gender?: string;
+    address?: any;
+    emergencyContact?: {
+      name: string;
+      relation: string;
+      phone: string;
+    };
+    medicalHistory?: any[];
+    biography?: string;
+  };
   careReceiverDetails: {
     age: number;
     gender: string;
@@ -47,7 +68,7 @@ interface Booking {
 }
 
 interface PendingRequest {
-  id: number;
+  _id: string;
   careReceiverName: string;
   careReceiverImage: string;
   serviceType: string;
@@ -57,7 +78,14 @@ interface PendingRequest {
   location: string;
   specialNeeds?: string;
   hourlyRate: number;
-  requestDate: string;
+  createdAt: string;
+  careReceiverId?: {
+    _id: string;
+    name: string;
+    email: string;
+    phone: string;
+    profileImage?: string;
+  };
 }
 
 type CaregiverBookingsNavigationProp = NativeStackNavigationProp<
@@ -71,6 +99,11 @@ const CaregiverBookingsScreen: React.FC = () => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
   const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Bookings state
+  const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
+  const [completedBookings, setCompletedBookings] = useState<Booking[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
   
   // Pending requests state
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
@@ -88,142 +121,130 @@ const CaregiverBookingsScreen: React.FC = () => {
   const [messageModalVisible, setMessageModalVisible] = useState(false);
   const [selectedContactBooking, setSelectedContactBooking] = useState<Booking | null>(null);
 
-  // Mock data
-  const upcomingBookings: Booking[] = [
-    {
-      id: 1,
-      careReceiverName: 'Eleanor Martinez',
-      careReceiverImage: 'https://i.pravatar.cc/150?img=1',
-      serviceType: 'Medical Care',
-      date: new Date(2024, 2, 15),
-      startTime: '09:00 AM',
-      endTime: '05:00 PM',
-      location: '123 Oak Street, Springfield',
-      needs: 'Medication administration, Blood pressure monitoring',
-      status: 'confirmed',
-      phoneNumber: '+1 (555) 123-4567',
-      email: 'eleanor.m@email.com',
-      careReceiverDetails: {
-        age: 78,
-        gender: 'Female',
-        address: '123 Oak Street, Springfield, IL 62701',
-        emergencyContact: {
-          name: 'Sarah Martinez',
-          relation: 'Daughter',
-          phone: '+1 (555) 987-6543',
-        },
-        medicalHistory: [
-          'Type 2 Diabetes',
-          'Hypertension',
-          'Osteoarthritis',
-        ],
-        biography: 'Eleanor is a retired teacher who loves gardening and classical music. She requires assistance with daily medication and mobility support.',
-      },
-    },
-    {
-      id: 2,
-      careReceiverName: 'Robert Chen',
-      careReceiverImage: 'https://i.pravatar.cc/150?img=12',
-      serviceType: 'Companionship',
-      date: new Date(2024, 2, 18),
-      startTime: '10:00 AM',
-      endTime: '02:00 PM',
-      location: '456 Maple Avenue, Portland',
-      needs: 'Conversation, Light activities',
-      status: 'confirmed',
-      phoneNumber: '+1 (555) 234-5678',
-      email: 'robert.chen@email.com',
-      careReceiverDetails: {
-        age: 82,
-        gender: 'Male',
-        address: '456 Maple Avenue, Portland, OR 97201',
-        emergencyContact: {
-          name: 'David Chen',
-          relation: 'Son',
-          phone: '+1 (555) 876-5432',
-        },
-        medicalHistory: [
-          'Mild Dementia',
-          'Heart Disease',
-        ],
-        biography: 'Robert enjoys playing chess and sharing stories from his career as an engineer. He benefits from regular social interaction.',
-      },
-    },
-  ];
-
-  const completedBookings: Booking[] = [
-    {
-      id: 3,
-      careReceiverName: 'Margaret Wilson',
-      careReceiverImage: 'https://i.pravatar.cc/150?img=5',
-      serviceType: 'Personal Care',
-      date: new Date(2024, 2, 10),
-      startTime: '08:00 AM',
-      endTime: '12:00 PM',
-      location: '789 Pine Road, Seattle',
-      needs: 'Bathing assistance, Dressing',
-      status: 'completed',
-      phoneNumber: '+1 (555) 345-6789',
-      email: 'margaret.w@email.com',
-      careReceiverDetails: {
-        age: 75,
-        gender: 'Female',
-        address: '789 Pine Road, Seattle, WA 98101',
-        emergencyContact: {
-          name: 'Jennifer Wilson',
-          relation: 'Daughter',
-          phone: '+1 (555) 765-4321',
-        },
-        medicalHistory: [
-          'Arthritis',
-          'Limited Mobility',
-        ],
-        biography: 'Margaret is a warm and friendly person who enjoys knitting and watching classic films.',
-      },
-    },
-  ];
-
   useEffect(() => {
     loadPendingRequests();
+    loadBookings();
   }, []);
+
+  const loadBookings = async () => {
+    setLoadingBookings(true);
+    try {
+      // Fetch all bookings (confirmed and completed)
+      const data = await ApiService.getCaregiverBookings();
+      console.log('📥 Bookings from database:', data);
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Transform and separate bookings
+      const transformedBookings: Booking[] = data.map((booking: any) => {
+        const careReceiver = booking.careReceiverId || {};
+        
+        // Format address
+        let addressString = '';
+        if (typeof careReceiver.address === 'object' && careReceiver.address !== null) {
+          const addr = careReceiver.address;
+          const parts = [addr.street, addr.city, addr.state, addr.zipCode].filter(Boolean);
+          addressString = parts.join(', ');
+        } else {
+          addressString = careReceiver.address || booking.location || '';
+        }
+        
+        // Format medical history
+        let medicalHistoryArray: string[] = [];
+        if (Array.isArray(careReceiver.medicalHistory)) {
+          medicalHistoryArray = careReceiver.medicalHistory.map((item: any) => 
+            typeof item === 'string' ? item : item.condition || ''
+          ).filter(Boolean);
+        }
+        
+        return {
+          _id: booking._id,
+          careReceiverName: careReceiver.name || 'Unknown',
+          careReceiverImage: careReceiver.profileImage || 'https://i.pravatar.cc/150?img=1',
+          serviceType: booking.serviceType,
+          date: new Date(booking.date),
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          location: booking.location,
+          needs: booking.needs || '',
+          status: booking.status,
+          phoneNumber: careReceiver.phoneNumber || careReceiver.phone || '',
+          email: careReceiver.email || '',
+          hourlyRate: booking.hourlyRate,
+          createdAt: booking.createdAt,
+          careReceiverId: booking.careReceiverId,
+          careReceiverDetails: {
+            age: careReceiver.age || 0,
+            gender: careReceiver.gender || 'Not specified',
+            address: addressString,
+            emergencyContact: careReceiver.emergencyContact || {
+              name: '',
+              relation: '',
+              phone: '',
+            },
+            medicalHistory: medicalHistoryArray,
+            biography: careReceiver.biography || '',
+          },
+        };
+      });
+      
+      // Separate upcoming (confirmed) and completed bookings
+      const upcoming = transformedBookings.filter(b => {
+        const bookingDate = new Date(b.date);
+        bookingDate.setHours(0, 0, 0, 0);
+        return (b.status === 'confirmed' || b.status === 'pending') && bookingDate >= today;
+      }).sort((a, b) => a.date.getTime() - b.date.getTime());
+      
+      const completed = transformedBookings.filter(b => 
+        b.status === 'completed'
+      ).sort((a, b) => b.date.getTime() - a.date.getTime());
+      
+      setUpcomingBookings(upcoming);
+      setCompletedBookings(completed);
+      
+      console.log('✅ Loaded bookings - Upcoming:', upcoming.length, 'Completed:', completed.length);
+    } catch (error: any) {
+      console.error('❌ Error loading bookings:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load bookings');
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
 
   const loadPendingRequests = async () => {
     setLoadingRequests(true);
-    // Simulate API call
-    setTimeout(() => {
-      const mockPendingRequests: PendingRequest[] = [
-        {
-          id: 101,
-          careReceiverName: 'Alice Thompson',
-          careReceiverImage: 'https://i.pravatar.cc/150?img=20',
-          serviceType: 'Medical Care',
-          requestedDate: new Date(2024, 2, 20),
-          startTime: '09:00 AM',
-          endTime: '01:00 PM',
-          location: '321 Birch Lane, Boston',
-          specialNeeds: 'Experience with diabetes care required',
-          hourlyRate: 35,
-          requestDate: '2 hours ago',
-        },
-        {
-          id: 102,
-          careReceiverName: 'George Patterson',
-          careReceiverImage: 'https://i.pravatar.cc/150?img=15',
-          serviceType: 'Companionship',
-          requestedDate: new Date(2024, 2, 22),
-          startTime: '02:00 PM',
-          endTime: '06:00 PM',
-          location: '654 Cedar Street, Austin',
-          hourlyRate: 25,
-          requestDate: '5 hours ago',
-        },
-      ];
-      setPendingRequests(mockPendingRequests);
+    try {
+      const data = await ApiService.getPendingRequests();
+      console.log('📥 Pending requests from database:', data);
+      
+      // Transform the data to match our interface
+      const transformedRequests: PendingRequest[] = data.map((request: any) => ({
+        _id: request._id,
+        careReceiverName: request.careReceiverId?.name || 'Unknown',
+        careReceiverImage: request.careReceiverId?.profileImage || 'https://i.pravatar.cc/150?img=1',
+        serviceType: request.serviceType,
+        requestedDate: new Date(request.requestedDate),
+        startTime: request.startTime,
+        endTime: request.endTime,
+        location: request.location,
+        specialNeeds: request.specialNeeds,
+        hourlyRate: request.hourlyRate,
+        createdAt: request.createdAt,
+        careReceiverId: request.careReceiverId,
+      }));
+      
+      setPendingRequests(transformedRequests);
+      console.log('✅ Loaded', transformedRequests.length, 'pending requests');
+    } catch (error: any) {
+      console.error('❌ Error loading pending requests:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load pending requests');
+    } finally {
       setLoadingRequests(false);
-    }, 1000);
+    }
   };
 
-  const handleApproveRequest = (request: PendingRequest) => {
+  const handleApproveRequest = async (request: PendingRequest) => {
     Alert.alert(
       'Approve Request',
       `Accept booking request from ${request.careReceiverName}?`,
@@ -231,9 +252,24 @@ const CaregiverBookingsScreen: React.FC = () => {
         {text: 'Cancel', style: 'cancel'},
         {
           text: 'Approve',
-          onPress: () => {
-            setPendingRequests(prev => prev.filter(r => r.id !== request.id));
-            Alert.alert('Success', 'Booking request approved!');
+          onPress: async () => {
+            try {
+              setLoadingRequests(true);
+              await ApiService.approveBookingRequest(request._id);
+              
+              // Remove from pending list
+              setPendingRequests(prev => prev.filter(r => r._id !== request._id));
+              
+              Alert.alert('Success', 'Booking request approved! The booking has been added to your schedule.');
+              
+              // Reload both pending requests and bookings
+              loadPendingRequests();
+              loadBookings();
+            } catch (error: any) {
+              console.error('Error approving request:', error);
+              Alert.alert('Error', error.response?.data?.message || 'Failed to approve request');
+              setLoadingRequests(false);
+            }
           },
         },
       ]
@@ -245,18 +281,33 @@ const CaregiverBookingsScreen: React.FC = () => {
     setRejectionModalVisible(true);
   };
 
-  const confirmRejection = () => {
+  const confirmRejection = async () => {
     if (!rejectionReason.trim()) {
       Alert.alert('Error', 'Please provide a reason for rejection');
       return;
     }
     
     if (selectedRequest) {
-      setPendingRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
-      setRejectionModalVisible(false);
-      setRejectionReason('');
-      setSelectedRequest(null);
-      Alert.alert('Request Rejected', 'The client has been notified.');
+      try {
+        setLoadingRequests(true);
+        await ApiService.rejectBookingRequest(selectedRequest._id, rejectionReason.trim());
+        
+        // Remove from pending list
+        setPendingRequests(prev => prev.filter(r => r._id !== selectedRequest._id));
+        
+        setRejectionModalVisible(false);
+        setRejectionReason('');
+        setSelectedRequest(null);
+        
+        Alert.alert('Request Rejected', 'The client has been notified of your decision.');
+        
+        // Reload pending requests to ensure data is fresh
+        loadPendingRequests();
+      } catch (error: any) {
+        console.error('Error rejecting request:', error);
+        Alert.alert('Error', error.response?.data?.message || 'Failed to reject request');
+        setLoadingRequests(false);
+      }
     }
   };
 
@@ -314,7 +365,7 @@ const CaregiverBookingsScreen: React.FC = () => {
   };
 
   const renderBookingCard = (booking: Booking) => (
-    <View key={booking.id} style={styles.bookingCard}>
+    <View key={booking._id} style={styles.bookingCard}>
       <View style={styles.bookingHeader}>
         <View style={styles.dateBox}>
           <Text style={styles.dateMonth}>
@@ -395,7 +446,7 @@ const CaregiverBookingsScreen: React.FC = () => {
           <Text style={[styles.tableHeaderText, styles.tableActionColumn]}>Action</Text>
         </View>
         {completedBookings.map(booking => (
-          <View key={booking.id} style={styles.tableRow}>
+          <View key={booking._id} style={styles.tableRow}>
             <View style={styles.tableDateColumn}>
               <Text style={styles.tableDateText}>
                 {booking.date.toLocaleDateString('default', {month: 'short', day: 'numeric'})}
@@ -496,7 +547,7 @@ const CaregiverBookingsScreen: React.FC = () => {
           
           <View style={styles.calendarLegend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, {backgroundColor: '#8b5cf6'}]} />
+              <View style={styles.legendDotPurple} />
               <Text style={styles.legendText}>Confirmed Bookings</Text>
             </View>
           </View>
@@ -520,8 +571,26 @@ const CaregiverBookingsScreen: React.FC = () => {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.pendingScroll}>
-              {pendingRequests.map(request => (
-                <View key={request.id} style={styles.pendingCard}>
+              {pendingRequests.map(request => {
+                // Calculate relative time for request
+                const requestDate = new Date(request.createdAt);
+                const now = new Date();
+                const diffMs = now.getTime() - requestDate.getTime();
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMins / 60);
+                const diffDays = Math.floor(diffHours / 24);
+                
+                let requestDateText = '';
+                if (diffMins < 60) {
+                  requestDateText = `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`;
+                } else if (diffHours < 24) {
+                  requestDateText = `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+                } else {
+                  requestDateText = `${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`;
+                }
+                
+                return (
+                <View key={request._id} style={styles.pendingCard}>
                   <TouchableOpacity 
                     onPress={() => {
                       setSelectedPendingRequest(request);
@@ -535,7 +604,7 @@ const CaregiverBookingsScreen: React.FC = () => {
                       />
                       <View style={styles.pendingClientInfo}>
                         <Text style={styles.pendingClientName}>{request.careReceiverName}</Text>
-                        <Text style={styles.pendingRequestDate}>{request.requestDate}</Text>
+                        <Text style={styles.pendingRequestDate}>{requestDateText}</Text>
                       </View>
                     </View>
 
@@ -574,7 +643,8 @@ const CaregiverBookingsScreen: React.FC = () => {
                     </TouchableOpacity>
                   </View>
                 </View>
-              ))}
+              )})}
+
             </ScrollView>
           </View>
         ) : null}
@@ -601,7 +671,12 @@ const CaregiverBookingsScreen: React.FC = () => {
 
         {/* Bookings List Content */}
         <View style={styles.bookingsListContainer}>
-          {activeTab === 'upcoming' ? (
+          {loadingBookings ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#8b5cf6" />
+              <Text style={styles.loadingText}>Loading bookings...</Text>
+            </View>
+          ) : activeTab === 'upcoming' ? (
             upcomingBookings.length > 0 ? (
               upcomingBookings.map(renderBookingCard)
             ) : (
@@ -876,7 +951,7 @@ const CaregiverBookingsScreen: React.FC = () => {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.primaryActionButton, {backgroundColor: '#10b981', marginTop: 12}]}
+                    style={styles.primaryActionButtonGreen}
                     onPress={() => {
                       setMessageModalVisible(false);
                       Linking.openURL(`sms:${selectedContactBooking.phoneNumber}`);
@@ -1074,7 +1149,22 @@ const CaregiverBookingsScreen: React.FC = () => {
                     </View>
                     <View style={styles.requestTimelineBox}>
                       <Text style={styles.requestTimelineText}>
-                        Requested {selectedPendingRequest.requestDate}
+                        Requested {(() => {
+                          const requestDate = new Date(selectedPendingRequest.createdAt);
+                          const now = new Date();
+                          const diffMs = now.getTime() - requestDate.getTime();
+                          const diffMins = Math.floor(diffMs / 60000);
+                          const diffHours = Math.floor(diffMins / 60);
+                          const diffDays = Math.floor(diffHours / 24);
+                          
+                          if (diffMins < 60) {
+                            return `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`;
+                          } else if (diffHours < 24) {
+                            return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+                          } else {
+                            return `${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`;
+                          }
+                        })()}
                       </Text>
                       <View style={styles.requestStatusBadge}>
                         <Icon name="clock" size={12} color="#f59e0b" />
@@ -1598,6 +1688,12 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  legendDotPurple: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#8b5cf6',
+  },
   legendText: {
     fontSize: 12,
     color: '#6b7280',
@@ -1700,6 +1796,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     marginBottom: 8,
+  },
+  primaryActionButtonGreen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#10b981',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    marginTop: 12,
   },
   primaryActionText: {
     fontSize: 16,

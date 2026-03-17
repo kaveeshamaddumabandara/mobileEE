@@ -14,6 +14,23 @@ import CareDocumentationScreen from '../screens/caregiver/CareDocumentationScree
 
 const Tab = createBottomTabNavigator<CaregiverTabParamList>();
 
+// Extract tabBarIcon functions to avoid nested components
+const HomeTabIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="home" size={size} color={color} />
+);
+
+const BriefcaseTabIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="briefcase" size={size} color={color} />
+);
+
+const FileTextTabIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="file-text" size={size} color={color} />
+);
+
+const UserTabIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="user" size={size} color={color} />
+);
+
 const CaregiverNavigator: React.FC = () => {
   return (
     <Tab.Navigator
@@ -51,9 +68,7 @@ const CaregiverNavigator: React.FC = () => {
         component={CaregiverDashboardScreen}
         options={{
           tabBarLabel: 'Home',
-          tabBarIcon: ({color, size}) => (
-            <Icon name="home" size={size} color={color} />
-          ),
+          tabBarIcon: HomeTabIcon,
         }}
       />
       <Tab.Screen
@@ -61,9 +76,7 @@ const CaregiverNavigator: React.FC = () => {
         component={CaregiverBookingsScreen}
         options={{
           tabBarLabel: 'Jobs',
-          tabBarIcon: ({color, size}) => (
-            <Icon name="briefcase" size={size} color={color} />
-          ),
+          tabBarIcon: BriefcaseTabIcon,
         }}
       />
       <Tab.Screen
@@ -71,9 +84,7 @@ const CaregiverNavigator: React.FC = () => {
         component={CareDocumentationScreen}
         options={{
           tabBarLabel: 'Logs',
-          tabBarIcon: ({color, size}) => (
-            <Icon name="file-text" size={size} color={color} />
-          ),
+          tabBarIcon: FileTextTabIcon,
         }}
       />
       <Tab.Screen
@@ -81,9 +92,7 @@ const CaregiverNavigator: React.FC = () => {
         component={CaregiverProfileScreen}
         options={{
           tabBarLabel: 'Profile',
-          tabBarIcon: ({color, size}) => (
-            <Icon name="user" size={size} color={color} />
-          ),
+          tabBarIcon: UserTabIcon,
         }}
       />
     </Tab.Navigator>

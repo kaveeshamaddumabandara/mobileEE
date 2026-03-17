@@ -13,6 +13,9 @@ interface StatCardProps {
   };
 }
 
+const POSITIVE_COLOR = '#10B981';
+const NEGATIVE_COLOR = '#EF4444';
+
 const StatCard: React.FC<StatCardProps> = ({icon, value, label, color, trend}) => {
   return (
     <View style={styles.card}>
@@ -28,15 +31,15 @@ const StatCard: React.FC<StatCardProps> = ({icon, value, label, color, trend}) =
               <Icon
                 name={trend.isPositive ? 'trending-up' : 'trending-down'}
                 size={14}
-                color={trend.isPositive ? '#10B981' : '#EF4444'}
+                color={trend.isPositive ? POSITIVE_COLOR : NEGATIVE_COLOR}
               />
-              <Text
-                style={[
-                  styles.trendText,
-                  {color: trend.isPositive ? '#10B981' : '#EF4444'},
-                ]}>
-                {Math.abs(trend.value)}%
-              </Text>
+               <Text
+                 style={[
+                   styles.trendText,
+                   trend.isPositive ? styles.positiveTrend : styles.negativeTrend,
+                 ]}>
+                 {Math.abs(trend.value)}%
+               </Text>
             </View>
           )}
         </View>
@@ -95,6 +98,12 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  positiveTrend: {
+    color: '#10B981',
+  },
+  negativeTrend: {
+    color: '#EF4444',
   },
 });
 

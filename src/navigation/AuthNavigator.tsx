@@ -2,7 +2,7 @@ import React, {useState, useEffect} from 'react';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {AuthStackParamList} from './types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {ActivityIndicator, View} from 'react-native';
+import {ActivityIndicator, View, StyleSheet} from 'react-native';
 
 // Import screens
 import OnboardingScreen from '../screens/common/OnboardingScreen';
@@ -14,6 +14,8 @@ import ForgotPasswordScreen from '../screens/common/ForgotPasswordScreen';
 import ContactUsScreen from '../screens/common/ContactUsScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
+
+import {StyleSheet} from 'react-native';
 
 const AuthNavigator: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -36,7 +38,7 @@ const AuthNavigator: React.FC = () => {
 
   if (isLoading) {
     return (
-      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF'}}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2563EB" />
       </View>
     );
@@ -64,5 +66,14 @@ const AuthNavigator: React.FC = () => {
     </Stack.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+});
 
 export default AuthNavigator;

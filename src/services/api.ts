@@ -399,6 +399,13 @@ class ApiService {
     return response.data;
   }
 
+  // Get all bookings for care receiver
+  async getCareReceiverBookings(status?: string): Promise<any[]> {
+    const url = status ? `/carereceiver/my-bookings?status=${status}` : '/carereceiver/my-bookings';
+    const response = await this.api.get(url);
+    return response.data.data;
+  }
+
   // Care Documentation endpoints
   async createOrUpdateDocumentation(
     bookingId: string,

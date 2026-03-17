@@ -8,10 +8,9 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Modal,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -256,8 +255,15 @@ const CareReceiverRegisterScreen: React.FC<
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}>
-        {/* Title */}
+        {/* Logo and Title */}
         <View style={styles.titleSection}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../public/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={styles.title}>Register as Care Receiver</Text>
           <Text style={styles.subtitle}>Create your care receiver account</Text>
         </View>
@@ -602,6 +608,26 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderLeftWidth: 4,
     borderLeftColor: '#2563eb',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#2563eb',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    padding: 8,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   title: {
     fontSize: 26,

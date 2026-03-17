@@ -49,11 +49,7 @@ const CaregiverProfileScreen: React.FC = () => {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
+  const loadProfile = React.useCallback(async () => {
     try {
       const data = await ApiService.getProfile() as Caregiver;
       setProfile({
@@ -89,7 +85,11 @@ const CaregiverProfileScreen: React.FC = () => {
     } catch (error) {
       console.error('Error loading profile:', error);
     }
-  };
+  }, [user?.address, user?.profileImage]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const handleImagePick = async () => {
     Alert.alert(

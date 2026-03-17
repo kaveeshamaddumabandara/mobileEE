@@ -9,7 +9,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
-  Dimensions,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {CareReceiverTabParamList} from '../../navigation/types';
@@ -49,11 +48,7 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
   
   const ITEMS_PER_PAGE = 3;
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = React.useCallback(async () => {
     try {
       setLoading(true);
       
@@ -119,7 +114,11 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigation, user]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -144,7 +143,9 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
 
   const getMaxActivity = () => {
     if (weeklyActivity.length === 0) return 10;
-    return Math.max(...weeklyActivity.map(d => Math.max(d.hours, d.appointments)));
+    const maxValue = Math.max(...weeklyActivity.map(d => Math.max(d.hours, d.appointments)));
+    // Return at least 5 to prevent division by very small numbers
+    return Math.max(maxValue, 5);
   };
 
   if (loading) {
@@ -202,11 +203,11 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
           />
         }>
         {/* Welcome Card */}
-        <View style={{paddingHorizontal: 16, paddingTop: 16}}>
+        <View style={styles.welcomeCardContainer}>
           <WelcomeCard
             name={firstName}
             role="Care Receiver"
-            themeColor="#8b5cf6"
+            themeColor="#1D4ED8"
           />
         </View>
 
@@ -217,14 +218,12 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
               label="Appointments"
               value={dashboardStats.monthlyAppointments.toString()}
               icon="calendar"
-              trend="This month"
               color="#2563eb"
             />
             <StatCard
               label="Caregivers"
               value={dashboardStats.assignedCaregivers.toString()}
               icon="users"
-              trend="Active"
               color="#10b981"
             />
           </View>
@@ -234,14 +233,12 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
               label="Care Hours"
               value={`${dashboardStats.monthlyHours}h`}
               icon="clock"
-              trend="This month"
               color="#8b5cf6"
             />
             <StatCard
               label="Satisfaction"
               value={`${dashboardStats.satisfactionRate}%`}
               icon="heart"
-              trend="Excellent"
               color="#f59e0b"
             />
           </View>
@@ -259,50 +256,64 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
                 <Text style={styles.yAxisLabel}>Count</Text>
               </View>
               <View style={styles.chartBars}>
-                {weeklyActivity.map((data, index) => (
-                  <View key={index} style={styles.barContainer}>
-                    <View style={styles.barGroup}>
-                      <View style={styles.barWrapper}>
-                        {data.hours > 0 && (
-                          <Text style={styles.barValue}>{data.hours}</Text>
-                        )}
-                        <View
-                          style={[
-                            styles.bar,
-                            styles.hoursBar,
-                            {
-                              height: `${(data.hours / getMaxActivity()) * 100}%`,
-                            },
-                          ]}
-                        />
+                {weeklyActivity.map((data, index) => {
+                  const maxActivity = getMaxActivity();
+                  const hoursHeight = data.hours > 0 ? Math.max((data.hours / maxActivity) * 100, 8) : 0;
+                  const appointmentsHeight = data.appointments > 0 ? Math.max((data.appointments / maxActivity) * 100, 8) : 0;
+                  
+                  return (
+                    <View key={index} style={styles.barContainer}>
+                      <View style={styles.barGroup}>
+                        <View style={styles.barWrapper}>
+                          {data.hours > 0 && (
+                            <Text style={styles.barValue}>{data.hours}</Text>
+                          )}
+                          {data.hours > 0 ? (
+                            <View
+                              style={[
+                                styles.bar,
+                                styles.hoursBar,
+                                {
+                                  height: `${hoursHeight}%`,
+                                },
+                              ]}
+                            />
+                          ) : (
+                            <View style={styles.emptyBar} />
+                          )}
+                        </View>
+                        <View style={styles.barWrapper}>
+                          {data.appointments > 0 && (
+                            <Text style={styles.barValue}>{data.appointments}</Text>
+                          )}
+                          {data.appointments > 0 ? (
+                            <View
+                              style={[
+                                styles.bar,
+                                styles.appointmentsBar,
+                                {
+                                  height: `${appointmentsHeight}%`,
+                                },
+                              ]}
+                            />
+                          ) : (
+                            <View style={styles.emptyBar} />
+                          )}
+                        </View>
                       </View>
-                      <View style={styles.barWrapper}>
-                        {data.appointments > 0 && (
-                          <Text style={styles.barValue}>{data.appointments}</Text>
-                        )}
-                        <View
-                          style={[
-                            styles.bar,
-                            styles.appointmentsBar,
-                            {
-                              height: `${(data.appointments / getMaxActivity()) * 100}%`,
-                            },
-                          ]}
-                        />
-                      </View>
+                      <Text style={styles.barLabel}>{data.day}</Text>
                     </View>
-                    <Text style={styles.barLabel}>{data.day}</Text>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </View>
             <View style={styles.chartLegend}>
               <View style={styles.legendItem}>
-                <View style={[styles.legendDot, {backgroundColor: '#3b82f6'}]} />
+                <View style={[styles.legendDot, styles.legendDotBlue]} />
                 <Text style={styles.legendText}>Hours</Text>
               </View>
               <View style={styles.legendItem}>
-                <View style={[styles.legendDot, {backgroundColor: '#8b5cf6'}]} />
+                <View style={[styles.legendDot, styles.legendDotPurple]} />
                 <Text style={styles.legendText}>Appointments</Text>
               </View>
             </View>
@@ -595,6 +606,10 @@ const styles = StyleSheet.create({
   scrollViewContent: {
     paddingBottom: 100, // Space for floating tab bar
   },
+  welcomeCardContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
   statsSection: {
     padding: 20,
     paddingBottom: 0,
@@ -634,8 +649,9 @@ const styles = StyleSheet.create({
   },
   chartContainer: {
     flexDirection: 'row',
-    height: 200,
+    height: 220,
     marginTop: 16,
+    marginBottom: 12,
   },
   chartYAxis: {
     width: 30,
@@ -651,8 +667,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingBottom: 25,
+    justifyContent: 'space-around',
+    paddingBottom: 30,
+    paddingHorizontal: 4,
   },
   barContainer: {
     flex: 1,
@@ -672,17 +689,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: '100%',
     justifyContent: 'flex-end',
+    minWidth: 16,
   },
   barValue: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
-    color: '#374151',
-    marginBottom: 2,
+    color: '#111827',
+    marginBottom: 4,
   },
   bar: {
     width: '100%',
     borderRadius: 4,
-    minHeight: 20,
+  },
+  emptyBar: {
+    width: '100%',
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#f3f4f6',
   },
   hoursBar: {
     backgroundColor: '#3b82f6',
@@ -692,10 +715,9 @@ const styles = StyleSheet.create({
   },
   barLabel: {
     fontSize: 10,
+    fontWeight: '600',
     color: '#6b7280',
-    marginTop: 6,
-    position: 'absolute',
-    bottom: 0,
+    marginTop: 8,
   },
   chartLegend: {
     flexDirection: 'row',
@@ -712,6 +734,12 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  legendDotBlue: {
+    backgroundColor: '#3b82f6',
+  },
+  legendDotPurple: {
+    backgroundColor: '#8b5cf6',
   },
   legendText: {
     fontSize: 12,

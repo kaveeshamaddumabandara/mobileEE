@@ -11,8 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ImageBackground,
   Modal,
+  Image,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {AuthStackParamList} from '../../navigation/types.ts';
@@ -173,7 +173,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
           {/* Title Section */}
           <View style={styles.titleSection}>
             <View style={styles.iconContainer}>
-              <Icon name="user" size={40} color="#2563eb" />
+              <Image
+                source={require('../../public/logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
@@ -279,7 +283,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
 
             {/* Info Section */}
             <View style={styles.infoSection}>
-              <Icon name="shield" size={20} color="#2563eb" />
               <Text style={styles.infoText}>
                 Your data is secure and encrypted
               </Text>
@@ -339,17 +342,17 @@ const styles = StyleSheet.create({
   titleSection: {
     alignItems: 'center',
     marginBottom: 32,
-    marginTop: 20,
+    marginTop: 0,
   },
   iconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#dbeafe',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
-    shadowColor: '#2563eb',
+    shadowColor: '#7c3aed',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -357,6 +360,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
+    padding: 12,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   title: {
     fontSize: 32,

@@ -42,6 +42,13 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const [careReceiverProfile, setCareReceiverProfile] = useState<CareReceiver | null>(null);
   const [requirementsVisible, setRequirementsVisible] = useState(true);
   
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'find' | 'bookings'>('find');
+  
+  // Bookings state
+  const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  
   // User-entered care requirements
   const [medicalConditions, setMedicalConditions] = useState('');
   const [careNeeds, setCareNeeds] = useState('');
@@ -57,17 +64,57 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const [bookingNotes, setBookingNotes] = useState('');
   const [serviceType, setServiceType] = useState('General Care');
 
+  const loadData = React.useCallback(async () => {
+    await Promise.all([loadCaregivers(), loadProfile()]);
+  }, []);
+
+  const filterCaregivers = React.useCallback(() => {
+    let filtered = [...caregivers];
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        caregiver =>
+          caregiver.name?.toLowerCase().includes(query) ||
+          caregiver.qualification?.toLowerCase().includes(query) ||
+          caregiver.specialization?.some(s => s.toLowerCase().includes(query)) ||
+          caregiver.skills?.some(s => s.toLowerCase().includes(query)),
+      );
+    }
+
+    if (selectedFilter !== 'all') {
+      switch (selectedFilter) {
+        case 'highRating':
+          filtered = filtered.filter(c => (c.rating || 0) >= 4.0);
+          break;
+        case 'experienced':
+          filtered = filtered.filter(c => (c.experience || 0) >= 5);
+          break;
+        case 'affordable':
+          filtered = filtered.sort((a, b) => (a.hourlyRate || 0) - (b.hourlyRate || 0));
+          break;
+        case 'hasTransport':
+          filtered = filtered.filter(c => c.hasTransportation === true);
+          break;
+      }
+    }
+
+    setFilteredCaregivers(filtered);
+  }, [caregivers, searchQuery, selectedFilter]);
+
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     filterCaregivers();
-  }, [searchQuery, selectedFilter, caregivers]);
+  }, [filterCaregivers]);
 
-  const loadData = async () => {
-    await Promise.all([loadCaregivers(), loadProfile()]);
-  };
+  useEffect(() => {
+    if (activeTab === 'bookings') {
+      loadMyBookings();
+    }
+  }, [activeTab]);
 
   const loadProfile = async () => {
     try {
@@ -90,6 +137,32 @@ const CareReceiverBookingsScreen: React.FC = () => {
       Alert.alert('Error', 'Failed to load caregivers');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMyBookings = async () => {
+    try {
+      setLoadingBookings(true);
+      const bookings = await ApiService.getCareReceiverBookings();
+      console.log('📥 Fetched bookings:', bookings);
+      
+      // Transform bookings to include formatted data
+      const transformedBookings = bookings.map((booking: any) => ({
+        ...booking,
+        date: new Date(booking.date),
+        caregiverName: booking.caregiverId?.name || 'Unknown',
+        caregiverImage: booking.caregiverId?.profileImage || 'https://i.pravatar.cc/150?img=1',
+        caregiverPhone: booking.caregiverId?.phoneNumber || booking.caregiverId?.phone || '',
+        caregiverEmail: booking.caregiverId?.email || '',
+      }));
+      
+      setMyBookings(transformedBookings);
+      console.log('✅ Loaded', transformedBookings.length, 'bookings');
+    } catch (error: any) {
+      console.error('❌ Error loading bookings:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load bookings');
+    } finally {
+      setLoadingBookings(false);
     }
   };
 
@@ -212,39 +285,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
     setServiceType('General Care');
   };
 
-  const filterCaregivers = () => {
-    let filtered = [...caregivers];
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        caregiver =>
-          caregiver.name?.toLowerCase().includes(query) ||
-          caregiver.qualification?.toLowerCase().includes(query) ||
-          caregiver.specialization?.some(s => s.toLowerCase().includes(query)) ||
-          caregiver.skills?.some(s => s.toLowerCase().includes(query)),
-      );
-    }
-
-    if (selectedFilter !== 'all') {
-      switch (selectedFilter) {
-        case 'highRating':
-          filtered = filtered.filter(c => (c.rating || 0) >= 4.0);
-          break;
-        case 'experienced':
-          filtered = filtered.filter(c => (c.experience || 0) >= 5);
-          break;
-        case 'affordable':
-          filtered = filtered.sort((a, b) => (a.hourlyRate || 0) - (b.hourlyRate || 0));
-          break;
-        case 'hasTransport':
-          filtered = filtered.filter(c => c.hasTransportation === true);
-          break;
-      }
-    }
-
-    setFilteredCaregivers(filtered);
-  };
 
   const renderCaregiverCard = (caregiver: Caregiver) => {
     return (
@@ -384,7 +425,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
           onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={24} color="#374151" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Find Caregivers</Text>
+        <Text style={styles.headerTitle}>Bookings</Text>
         <TouchableOpacity
           onPress={() => setMenuVisible(true)}
           style={styles.menuButton}>
@@ -392,6 +433,35 @@ const CareReceiverBookingsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'find' && styles.activeTab]}
+          onPress={() => setActiveTab('find')}>
+          <Icon 
+            name="search" 
+            size={18} 
+            color={activeTab === 'find' ? '#2563eb' : '#6b7280'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'find' && styles.activeTabText]}>
+            Find Caregivers
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'bookings' && styles.activeTab]}
+          onPress={() => setActiveTab('bookings')}>
+          <Icon 
+            name="calendar" 
+            size={18} 
+            color={activeTab === 'bookings' ? '#2563eb' : '#6b7280'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'bookings' && styles.activeTabText]}>
+            My Bookings ({myBookings.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'find' ? (
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -653,6 +723,80 @@ const CareReceiverBookingsScreen: React.FC = () => {
           </View>
         )}
       </ScrollView>
+      ) : (
+        /* My Bookings Tab */
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={loadingBookings}
+              onRefresh={loadMyBookings}
+              colors={['#2563eb']}
+            />
+          }>
+          {loadingBookings ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#2563eb" />
+              <Text style={styles.loadingText}>Loading your bookings...</Text>
+            </View>
+          ) : myBookings.length > 0 ? (
+            <View style={styles.bookingsList}>
+              {myBookings.map((booking: any) => (
+                <View key={booking._id} style={styles.bookingCard}>
+                  <View style={styles.bookingHeader}>
+                    <View style={styles.dateBox}>
+                      <Text style={styles.dateMonth}>
+                        {booking.date.toLocaleDateString('default', {month: 'short'}).toUpperCase()}
+                      </Text>
+                      <Text style={styles.dateDay}>{booking.date.getDate()}</Text>
+                    </View>
+                    <View style={styles.bookingInfo}>
+                      <Text style={styles.bookingCaregiverName}>{booking.caregiverName}</Text>
+                      <Text style={styles.serviceType}>{booking.serviceType}</Text>
+                      <View style={styles.timeRow}>
+                        <Icon name="clock" size={14} color="#6b7280" />
+                        <Text style={styles.timeText}>
+                          {booking.startTime} - {booking.endTime}
+                        </Text>
+                        <View style={[
+                          styles.statusBadge,
+                          booking.status === 'confirmed' && styles.confirmedBadge,
+                          booking.status === 'pending' && styles.pendingBadge,
+                          booking.status === 'completed' && styles.completedBadge,
+                          booking.status === 'cancelled' && styles.cancelledBadge,
+                        ]}>
+                          <Text style={[
+                            styles.statusText,
+                            booking.status === 'confirmed' && styles.confirmedText,
+                            booking.status === 'pending' && styles.pendingText,
+                            booking.status === 'completed' && styles.completedText,
+                            booking.status === 'cancelled' && styles.cancelledText,
+                          ]}>
+                            {booking.status}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.locationRow}>
+                    <Icon name="map-pin" size={14} color="#6b7280" />
+                    <Text style={styles.locationText}>{booking.location}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Icon name="calendar" size={64} color="#d1d5db" />
+              <Text style={styles.emptyTitle}>No Bookings Yet</Text>
+              <Text style={styles.emptyText}>
+                You haven't made any bookings yet. Find a caregiver and book their services.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
 
       <Modal
         visible={bookingModalVisible}
@@ -1491,6 +1635,144 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     textAlign: 'center',
+  },
+  // Tab styles
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#f9fafb',
+  },
+  activeTab: {
+    backgroundColor: '#eff6ff',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  activeTabText: {
+    color: '#2563eb',
+  },
+  // Booking card styles
+  bookingsList: {
+    padding: 16,
+    gap: 12,
+  },
+  bookingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  bookingHeader: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  dateBox: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    minWidth: 55,
+  },
+  dateMonth: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  dateDay: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#2563eb',
+  },
+  bookingInfo: {
+    flex: 1,
+  },
+  bookingCaregiverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  serviceType: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 6,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  timeText: {
+    fontSize: 13,
+    color: '#6b7280',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  confirmedBadge: {
+    backgroundColor: '#d1fae5',
+  },
+  pendingBadge: {
+    backgroundColor: '#fef3c7',
+  },
+  completedBadge: {
+    backgroundColor: '#dbeafe',
+  },
+  cancelledBadge: {
+    backgroundColor: '#fee2e2',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  confirmedText: {
+    color: '#059669',
+  },
+  pendingText: {
+    color: '#d97706',
+  },
+  completedText: {
+    color: '#2563eb',
+  },
+  cancelledText: {
+    color: '#dc2626',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#6b7280',
+    flex: 1,
   },
 });
 

@@ -84,6 +84,11 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
         onPress={onClose}>
         <SafeAreaView style={styles.menuContainer}>
           <View style={styles.closeButtonContainer}>
+            <Image
+              source={require('../public/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Icon name="x" size={24} color="#374151" />
             </TouchableOpacity>
@@ -175,9 +180,9 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => handleMenuOption('about')}>
-            <View style={styles.iconContainer}>
-              <Icon name="info" size={20} color="#6b7280" />
-            </View>
+              <View style={styles.iconContainer}>
+                <Icon name="log-out" size={20} color={styles.logoutIconColor} />
+              </View>
             <Text style={styles.menuItemText}>About Us</Text>
             <Icon name="chevron-right" size={16} color="#9ca3af" />
           </TouchableOpacity>
@@ -204,16 +209,16 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
 
           <View style={styles.menuDivider} />
 
-          <TouchableOpacity
-            style={[styles.menuItem, styles.logoutItem]}
-            onPress={() => handleMenuOption('logout')}>
-            <View style={styles.iconContainer}>
-              <Icon name="log-out" size={20} color="#ef4444" />
-            </View>
-            <Text style={[styles.menuItemText, {color: '#ef4444'}]}>
-              Logout
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.menuItem, styles.logoutItem]}
+              onPress={() => handleMenuOption('logout')}>
+              <View style={styles.iconContainer}>
+                <Icon name="log-out" size={20} color={styles.logoutIconColor} />
+              </View>
+              <Text style={[styles.menuItemText, styles.logoutText]}>
+                Logout
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
       </TouchableOpacity>
@@ -239,10 +244,16 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   closeButtonContainer: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingTop: 5,
     paddingBottom: 2,
+  },
+  logoImage: {
+    width: 40,
+    height: 40,
   },
   closeButton: {
     padding: 4,
@@ -335,11 +346,15 @@ const styles = StyleSheet.create({
   logoutItem: {
     backgroundColor: '#fef2f2',
   },
+  logoutText: {
+    color: '#ef4444',
+  },
   menuDivider: {
     height: 1,
     backgroundColor: '#e5e7eb',
     marginVertical: 10,
   },
+  logoutIconColor: '#ef4444',
 });
 
 export default SideMenu;

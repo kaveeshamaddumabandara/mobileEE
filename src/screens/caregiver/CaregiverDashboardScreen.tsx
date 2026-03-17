@@ -190,7 +190,7 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
           />
         }>
         {/* Welcome Card */}
-        <View style={{paddingHorizontal: 16}}>
+        <View style={styles.welcomeCardContainer}>
           <WelcomeCard
             name={firstName}
             role="Caregiver"
@@ -421,7 +421,7 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
                           name="star"
                           size={14}
                           color={index < feedback.rating ? '#f59e0b' : '#d1d5db'}
-                          style={{marginRight: 2}}
+                          style={styles.starIcon}
                         />
                       ))}
                     </View>
@@ -532,6 +532,9 @@ const styles = StyleSheet.create({
   scrollViewContent: {
     paddingBottom: 100,
     paddingTop: 16,
+  },
+  welcomeCardContainer: {
+    paddingHorizontal: 16,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -717,6 +720,9 @@ const styles = StyleSheet.create({
   },
   ratingContainer: {
     flexDirection: 'row',
+  },
+  starIcon: {
+    marginRight: 2,
   },
   feedbackComment: {
     fontSize: 13,
