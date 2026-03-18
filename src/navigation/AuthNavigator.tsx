@@ -15,8 +15,6 @@ import ContactUsScreen from '../screens/common/ContactUsScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
-import {StyleSheet} from 'react-native';
-
 const AuthNavigator: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
