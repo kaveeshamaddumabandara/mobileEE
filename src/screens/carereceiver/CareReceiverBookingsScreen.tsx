@@ -40,7 +40,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [careReceiverProfile, setCareReceiverProfile] = useState<CareReceiver | null>(null);
-  const [requirementsVisible, setRequirementsVisible] = useState(true);
+  const [requirementsVisible, setRequirementsVisible] = useState(false);
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'find' | 'bookings'>('find');
@@ -63,6 +63,10 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const [bookingLocation, setBookingLocation] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
   const [serviceType, setServiceType] = useState('General Care');
+  
+  // Profile modal state
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [viewingCaregiver, setViewingCaregiver] = useState<Caregiver | null>(null);
 
   const loadData = React.useCallback(async () => {
     await Promise.all([loadCaregivers(), loadProfile()]);
@@ -130,8 +134,8 @@ const CareReceiverBookingsScreen: React.FC = () => {
     try {
       setLoading(true);
       const data = await ApiService.getCaregivers();
-      const availableCaregivers = data.filter(c => c.availability === true);
-      setCaregivers(availableCaregivers);
+      // Show all caregivers, not just available ones
+      setCaregivers(data);
     } catch (error) {
       console.error('Error loading caregivers:', error);
       Alert.alert('Error', 'Failed to load caregivers');
@@ -233,6 +237,11 @@ const CareReceiverBookingsScreen: React.FC = () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  };
+
+  const handleViewProfile = (caregiver: Caregiver) => {
+    setViewingCaregiver(caregiver);
+    setProfileModalVisible(true);
   };
 
   const handleBookNow = (caregiver: Caregiver) => {
@@ -385,7 +394,9 @@ const CareReceiverBookingsScreen: React.FC = () => {
         </View>
 
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.viewProfileButton}>
+          <TouchableOpacity 
+            style={styles.viewProfileButton}
+            onPress={() => handleViewProfile(caregiver)}>
             <Icon name="user" size={16} color="#2563eb" />
             <Text style={styles.viewProfileText}>View Profile</Text>
           </TouchableOpacity>
@@ -476,7 +487,9 @@ const CareReceiverBookingsScreen: React.FC = () => {
         <View style={styles.requirementsCard}>
           <View style={styles.requirementsHeader}>
             <Icon name="clipboard" size={18} color="#2563eb" />
-            <Text style={styles.requirementsTitle}>Enter Your Care Requirements</Text>
+            <Text style={styles.requirementsTitle}>
+              {requirementsVisible ? 'Enter Your Care Requirements' : 'Get Personalized Recommendations'}
+            </Text>
             <TouchableOpacity onPress={() => setRequirementsVisible(!requirementsVisible)}>
               <Icon 
                 name={requirementsVisible ? 'chevron-up' : 'chevron-down'} 
@@ -586,6 +599,14 @@ const CareReceiverBookingsScreen: React.FC = () => {
             </ScrollView>
           </View>
         )}
+
+        {/* All Caregivers Section */}
+        <View style={styles.sectionHeader}>
+          <Icon name="users" size={20} color="#2563eb" />
+          <Text style={styles.sectionTitle}>
+            {recommendedCaregivers.length > 0 ? 'All Caregivers' : 'Browse All Caregivers'}
+          </Text>
+        </View>
 
         <View style={styles.searchContainer}>
           <Icon name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
@@ -929,6 +950,203 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 style={styles.confirmButton}
                 onPress={handleSubmitBooking}>
                 <Text style={styles.confirmButtonText}>Submit Request</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Caregiver Profile Modal */}
+      <Modal
+        visible={profileModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setProfileModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Caregiver Profile</Text>
+              <TouchableOpacity onPress={() => setProfileModalVisible(false)}>
+                <Icon name="x" size={24} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              {viewingCaregiver && (
+                <View>
+                  {/* Profile Header */}
+                  <View style={styles.profileHeader}>
+                    <View style={styles.profileAvatarContainer}>
+                      {viewingCaregiver.profileImage ? (
+                        <Image 
+                          source={{uri: viewingCaregiver.profileImage}} 
+                          style={styles.profileAvatar} 
+                        />
+                      ) : (
+                        <View style={styles.profileAvatarPlaceholder}>
+                          <Text style={styles.profileAvatarText}>
+                            {viewingCaregiver.name?.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      {viewingCaregiver.availability && (
+                        <View style={styles.profileAvailableBadge}>
+                          <View style={styles.availableDot} />
+                          <Text style={styles.availableBadgeText}>Available</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.profileName}>{viewingCaregiver.name}</Text>
+                    <Text style={styles.profileQualification}>
+                      {viewingCaregiver.qualification || 'Certified Caregiver'}
+                    </Text>
+                    <View style={styles.profileRatingRow}>
+                      <Icon name="star" size={16} color="#fbbf24" />
+                      <Text style={styles.profileRating}>
+                        {viewingCaregiver.rating?.toFixed(1) || 'N/A'}
+                      </Text>
+                      <Text style={styles.profileExperience}>
+                        • {viewingCaregiver.experience || 0} years experience
+                      </Text>
+                    </View>
+                    <View style={styles.profileRateBox}>
+                      <Text style={styles.profileRateAmount}>
+                        Rs.{viewingCaregiver.hourlyRate || 'N/A'}
+                      </Text>
+                      <Text style={styles.profileRateLabel}>/hour</Text>
+                    </View>
+                  </View>
+
+                  {/* Bio Section */}
+                  {viewingCaregiver.bio && (
+                    <View style={styles.profileSection}>
+                      <View style={styles.profileSectionHeader}>
+                        <Icon name="file-text" size={18} color="#2563eb" />
+                        <Text style={styles.profileSectionTitle}>About</Text>
+                      </View>
+                      <Text style={styles.profileBio}>{viewingCaregiver.bio}</Text>
+                    </View>
+                  )}
+
+                  {/* Specializations */}
+                  {viewingCaregiver.specialization && viewingCaregiver.specialization.length > 0 && (
+                    <View style={styles.profileSection}>
+                      <View style={styles.profileSectionHeader}>
+                        <Icon name="award" size={18} color="#2563eb" />
+                        <Text style={styles.profileSectionTitle}>Specializations</Text>
+                      </View>
+                      <View style={styles.profileChipsContainer}>
+                        {viewingCaregiver.specialization.map((spec, index) => (
+                          <View key={index} style={styles.profileChip}>
+                            <Text style={styles.profileChipText}>{spec}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Skills */}
+                  {viewingCaregiver.skills && viewingCaregiver.skills.length > 0 && (
+                    <View style={styles.profileSection}>
+                      <View style={styles.profileSectionHeader}>
+                        <Icon name="check-circle" size={18} color="#10b981" />
+                        <Text style={styles.profileSectionTitle}>Skills</Text>
+                      </View>
+                      <View style={styles.profileChipsContainer}>
+                        {viewingCaregiver.skills.map((skill, index) => (
+                          <View key={index} style={styles.profileSkillChip}>
+                            <Text style={styles.profileSkillChipText}>{skill}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Languages */}
+                  {viewingCaregiver.languages && viewingCaregiver.languages.length > 0 && (
+                    <View style={styles.profileSection}>
+                      <View style={styles.profileSectionHeader}>
+                        <Icon name="message-circle" size={18} color="#2563eb" />
+                        <Text style={styles.profileSectionTitle}>Languages</Text>
+                      </View>
+                      <Text style={styles.profileLanguages}>
+                        {viewingCaregiver.languages.join(', ')}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Additional Info */}
+                  <View style={styles.profileSection}>
+                    <View style={styles.profileSectionHeader}>
+                      <Icon name="info" size={18} color="#2563eb" />
+                      <Text style={styles.profileSectionTitle}>Additional Information</Text>
+                    </View>
+                    <View style={styles.profileInfoGrid}>
+                      {viewingCaregiver.hasTransportation && (
+                        <View style={styles.profileInfoItem}>
+                          <Icon name="truck" size={16} color="#6b7280" />
+                          <Text style={styles.profileInfoText}>Has Transportation</Text>
+                        </View>
+                      )}
+                      {viewingCaregiver.availabilityType && (
+                        <View style={styles.profileInfoItem}>
+                          <Icon name="clock" size={16} color="#6b7280" />
+                          <Text style={styles.profileInfoText}>
+                            {viewingCaregiver.availabilityType}
+                          </Text>
+                        </View>
+                      )}
+                      {viewingCaregiver.travelRadius && (
+                        <View style={styles.profileInfoItem}>
+                          <Icon name="map-pin" size={16} color="#6b7280" />
+                          <Text style={styles.profileInfoText}>
+                            {viewingCaregiver.travelRadius} km radius
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Contact Info */}
+                  {(viewingCaregiver.email || viewingCaregiver.phone) && (
+                    <View style={styles.profileSection}>
+                      <View style={styles.profileSectionHeader}>
+                        <Icon name="phone" size={18} color="#2563eb" />
+                        <Text style={styles.profileSectionTitle}>Contact Information</Text>
+                      </View>
+                      {viewingCaregiver.phone && (
+                        <View style={styles.profileContactItem}>
+                          <Icon name="phone" size={16} color="#6b7280" />
+                          <Text style={styles.profileContactText}>
+                            {viewingCaregiver.phone}
+                          </Text>
+                        </View>
+                      )}
+                      {viewingCaregiver.email && (
+                        <View style={styles.profileContactItem}>
+                          <Icon name="mail" size={16} color="#6b7280" />
+                          <Text style={styles.profileContactText}>
+                            {viewingCaregiver.email}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.profileModalFooter}>
+              <TouchableOpacity
+                style={styles.profileBookButton}
+                onPress={() => {
+                  setProfileModalVisible(false);
+                  if (viewingCaregiver) {
+                    handleBookNow(viewingCaregiver);
+                  }
+                }}>
+                <Icon name="calendar" size={18} color="#fff" />
+                <Text style={styles.profileBookButtonText}>Book Now</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1773,6 +1991,196 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
     flex: 1,
+  },
+  // Profile Modal Styles
+  profileHeader: {
+    alignItems: 'center',
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    marginBottom: 20,
+  },
+  profileAvatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  profileAvatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#2563eb',
+  },
+  profileAvatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#dbeafe',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#2563eb',
+  },
+  profileAvatarText: {
+    fontSize: 40,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  profileAvailableBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  availableBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  profileQualification: {
+    fontSize: 16,
+    color: '#6b7280',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  profileRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 12,
+  },
+  profileRating: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  profileExperience: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  profileRateBox: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  profileRateAmount: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  profileRateLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginLeft: 4,
+  },
+  profileSection: {
+    marginBottom: 24,
+  },
+  profileSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  profileSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  profileBio: {
+    fontSize: 15,
+    color: '#4b5563',
+    lineHeight: 22,
+  },
+  profileChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  profileChip: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  profileChipText: {
+    fontSize: 14,
+    color: '#2563eb',
+    fontWeight: '500',
+  },
+  profileSkillChip: {
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  profileSkillChipText: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: '500',
+  },
+  profileLanguages: {
+    fontSize: 15,
+    color: '#4b5563',
+  },
+  profileInfoGrid: {
+    gap: 12,
+  },
+  profileInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileInfoText: {
+    fontSize: 15,
+    color: '#4b5563',
+  },
+  profileContactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  profileContactText: {
+    fontSize: 15,
+    color: '#4b5563',
+  },
+  profileModalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  profileBookButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2563eb',
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  profileBookButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 
