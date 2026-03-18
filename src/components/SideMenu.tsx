@@ -181,7 +181,7 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
             style={styles.menuItem}
             onPress={() => handleMenuOption('about')}>
               <View style={styles.iconContainer}>
-                <Icon name="log-out" size={20} color={styles.logoutIconColor} />
+                <Icon name="info" size={20} color="#6b7280" />
               </View>
             <Text style={styles.menuItemText}>About Us</Text>
             <Icon name="chevron-right" size={16} color="#9ca3af" />
@@ -213,7 +213,7 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
               style={[styles.menuItem, styles.logoutItem]}
               onPress={() => handleMenuOption('logout')}>
               <View style={styles.iconContainer}>
-                <Icon name="log-out" size={20} color={styles.logoutIconColor} />
+                <Icon name="log-out" size={20} color="#ef4444" />
               </View>
               <Text style={[styles.menuItemText, styles.logoutText]}>
                 Logout
@@ -354,7 +354,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
     marginVertical: 10,
   },
-  logoutIconColor: '#ef4444',
 });
 
 export default SideMenu;

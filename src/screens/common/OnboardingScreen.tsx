@@ -91,26 +91,46 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation}) => {
   const renderSlide = (slide: Slide) => {
     const isLastSlide = slide.id === slides.length;
     const isFirstSlide = slide.id === 1;
+    const isCaregiverSlide = slide.id === 2;
+    const isCareReceiverSlide = slide.id === 3;
+    const isGetStartedSlide = slide.id === 4;
 
     return (
       <View style={styles.slide} key={slide.id}>
         <SafeAreaView style={styles.safeArea}>
-          {/* Icon Container */}
+          {/* Image/Icon Container */}
           <View style={styles.iconWrapper}>
-            <View style={[
-              styles.iconContainer,
-              isFirstSlide ? styles.firstSlideIconContainer : {backgroundColor: slide.backgroundColor}
-            ]}>
-              {isFirstSlide ? (
+            {isFirstSlide ? (
+              <View style={styles.firstSlideIconContainer}>
                 <Image
                   source={require('../../public/logo.png')}
                   style={styles.logoImage}
                   resizeMode="contain"
                 />
-              ) : (
+              </View>
+            ) : isCaregiverSlide ? (
+              <Image
+                source={require('../../public/caregiver_banner.jpg')}
+                style={styles.bannerImage}
+                resizeMode="cover"
+              />
+            ) : isCareReceiverSlide ? (
+              <Image
+                source={require('../../public/Carereceiver_banner.jpg')}
+                style={styles.bannerImage}
+                resizeMode="cover"
+              />
+            ) : isGetStartedSlide ? (
+              <Image
+                source={require('../../public/aubowan_banner.jpg')}
+                style={styles.bannerImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.iconContainer, {backgroundColor: slide.backgroundColor}]}>
                 <Icon name={slide.icon} size={80} color={slide.color} />
-              )}
-            </View>
+              </View>
+            )}
           </View>
 
           {/* Content */}
@@ -188,13 +208,41 @@ const styles = StyleSheet.create({
   },
   slide: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  safeArea: {
+    flex: 1,
     paddingHorizontal: 20,
   },
-  slideContent: {
+  iconWrapper: {
+    flex: 2,
+    justifyContent: 'center',
     alignItems: 'center',
-    maxWidth: 300,
+    width: '100%',
+  },
+  iconContainer: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  firstSlideIconContainer: {
+    backgroundColor: 'transparent',
+  },
+  logoImage: {
+    width: 160,
+    height: 160,
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 20,
   },
   title: {
     fontSize: 28,
@@ -208,55 +256,35 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 40,
+    paddingHorizontal: 10,
   },
-  image: {
-    width: 200,
-    height: 200,
-    marginBottom: 40,
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
-  activeDot: {
-    backgroundColor: '#3B82F6',
-  },
-  inactiveDot: {
-    backgroundColor: '#D1D5DB',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+  bottomContainer: {
+    paddingBottom: 20,
+    paddingTop: 10,
   },
   skipButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
   },
   skipButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#6B7280',
     fontWeight: '600',
   },
   nextButton: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
     borderRadius: 25,
+    gap: 8,
   },
   nextButtonText: {
     fontSize: 16,
@@ -264,22 +292,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   getStartedButton: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
     borderRadius: 25,
-    alignSelf: 'center',
+    marginBottom: 12,
+    gap: 8,
   },
   getStartedButtonText: {
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '600',
   },
-  slideBackgroundFirst: {
-    backgroundColor: '#ffffff',
+  signInButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
   },
-  slideBackgroundDynamic: {
-    // Dynamic background will be set inline
+  signInButtonText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  pagination: {
+    bottom: 120,
+  },
+  dot: {
+    backgroundColor: '#D1D5DB',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
+  },
+  activeDot: {
+    backgroundColor: '#3B82F6',
+    width: 24,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
   },
 });
 
