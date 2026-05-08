@@ -391,12 +391,59 @@ class ApiService {
     date: Date;
     startTime: string;
     endTime: string;
+    duration?: number;
     location: string;
     needs?: string;
     hourlyRate: number;
+    totalAmount?: number;
   }): Promise<any> {
-    const response = await this.api.post('/caregiver/bookings', bookingData);
-    return response.data;
+    const fallbackPayload = {
+      caregiverId: bookingData.caregiverId,
+      serviceType: bookingData.serviceType,
+      requestedDate: bookingData.date,
+      startTime: bookingData.startTime,
+      endTime: bookingData.endTime,
+      duration: bookingData.duration,
+      location: bookingData.location,
+      specialNeeds: bookingData.needs || '',
+      hourlyRate: bookingData.hourlyRate,
+      totalAmount: bookingData.totalAmount,
+    };
+
+    const attempts: Array<{endpoint: string; status?: number; message?: string}> = [];
+    const endpoints: Array<{url: string; payload: any}> = [
+      {url: '/carereceiver/bookings', payload: bookingData},
+      {url: '/caregiver/bookings', payload: bookingData},
+      {url: '/carereceiver/booking-request', payload: fallbackPayload},
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await this.api.post(endpoint.url, endpoint.payload);
+        return response.data;
+      } catch (error: any) {
+        attempts.push({
+          endpoint: endpoint.url,
+          status: error?.response?.status,
+          message: error?.response?.data?.message || error?.message,
+        });
+      }
+    }
+
+    const lastAttempt = attempts[attempts.length - 1];
+    const error = new Error(
+      `Booking API failed. Attempts: ${attempts
+        .map(item => `${item.endpoint} (${item.status || 'no-status'})`)
+        .join(', ')}`,
+    ) as any;
+    error.response = {
+      status: lastAttempt?.status,
+      data: {
+        message: lastAttempt?.message || 'Failed to submit booking request',
+        attempts,
+      },
+    };
+    throw error;
   }
 
   // Get all bookings for care receiver
