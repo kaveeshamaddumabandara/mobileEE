@@ -63,6 +63,8 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const [bookingLocation, setBookingLocation] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
   const [serviceType, setServiceType] = useState('General Care');
+  const [durationHours, setDurationHours] = useState(1);
+  const [submittingBooking, setSubmittingBooking] = useState(false);
   
   // Profile modal state
   const [profileModalVisible, setProfileModalVisible] = useState(false);
@@ -148,7 +150,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
     try {
       setLoadingBookings(true);
       const bookings = await ApiService.getCareReceiverBookings();
-      console.log('📥 Fetched bookings:', bookings);
+      console.log('Fetched bookings:', bookings);
       
       // Transform bookings to include formatted data
       const transformedBookings = bookings.map((booking: any) => ({
@@ -161,9 +163,9 @@ const CareReceiverBookingsScreen: React.FC = () => {
       }));
       
       setMyBookings(transformedBookings);
-      console.log('✅ Loaded', transformedBookings.length, 'bookings');
+      console.log('Loaded', transformedBookings.length, 'bookings');
     } catch (error: any) {
-      console.error('❌ Error loading bookings:', error);
+      console.error('Error loading bookings:', error);
       Alert.alert('Error', error.response?.data?.message || 'Failed to load bookings');
     } finally {
       setLoadingBookings(false);
@@ -246,10 +248,53 @@ const CareReceiverBookingsScreen: React.FC = () => {
 
   const handleBookNow = (caregiver: Caregiver) => {
     setSelectedCaregiver(caregiver);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
     setBookingModalVisible(true);
   };
 
+  const closeBookingModal = () => {
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+    setBookingModalVisible(false);
+  };
+
+  const getBookingServiceType = (type: string) => {
+    const serviceTypeMap: Record<string, string> = {
+      'General Care': 'Personal Care',
+      'Medical Care': 'Medical Support',
+      Companionship: 'Companionship',
+      'Personal Care': 'Personal Care',
+    };
+
+    return serviceTypeMap[type] || 'Other';
+  };
+
+  const buildEndTime = (startTimeDate: Date) => {
+    const endTimeDate = new Date(startTimeDate);
+    endTimeDate.setHours(endTimeDate.getHours() + durationHours);
+    return endTimeDate.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const calculatedAmount = (selectedCaregiver?.hourlyRate || 0) * durationHours;
+
   const handleSubmitBooking = () => {
+    if (!selectedCaregiver?._id) {
+      Alert.alert('Error', 'Please select a caregiver');
+      return;
+    }
+
+    if (!selectedCaregiver.hourlyRate || selectedCaregiver.hourlyRate <= 0) {
+      Alert.alert('Error', 'Invalid caregiver hourly rate');
+      return;
+    }
+
+    const hourlyRate = selectedCaregiver.hourlyRate;
+
     if (!bookingLocation.trim()) {
       Alert.alert('Error', 'Please enter a location');
       return;
@@ -260,25 +305,59 @@ const CareReceiverBookingsScreen: React.FC = () => {
       caregiverName: selectedCaregiver?.name,
       date: bookingDate.toISOString(),
       time: bookingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      durationHours,
+      totalAmount: calculatedAmount,
       location: bookingLocation,
-      serviceType: serviceType,
+      serviceType: getBookingServiceType(serviceType),
       notes: bookingNotes,
-      hourlyRate: selectedCaregiver?.hourlyRate,
+      hourlyRate,
     };
 
     console.log('Booking Data:', bookingData);
     
     Alert.alert(
       'Booking Request',
-      `Do you want to book ${selectedCaregiver?.name} for ${serviceType} on ${bookingDate.toLocaleDateString()} at ${bookingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}?`,
+      `Do you want to book ${selectedCaregiver?.name} for ${serviceType} on ${bookingDate.toLocaleDateString()} at ${bookingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} for ${durationHours} hour${durationHours > 1 ? 's' : ''}?\n\nTotal: Rs.${calculatedAmount}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm',
-          onPress: () => {
-            setBookingModalVisible(false);
-            Alert.alert('Success', 'Booking request submitted successfully!');
-            resetBookingForm();
+          onPress: async () => {
+            try {
+              setSubmittingBooking(true);
+
+              await ApiService.createBooking({
+                caregiverId: selectedCaregiver._id,
+                serviceType: getBookingServiceType(serviceType),
+                date: bookingDate,
+                startTime: bookingTime.toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                }),
+                endTime: buildEndTime(bookingTime),
+                duration: durationHours,
+                location: bookingLocation.trim(),
+                needs: bookingNotes.trim(),
+                hourlyRate,
+                totalAmount: calculatedAmount,
+              });
+
+              closeBookingModal();
+              resetBookingForm();
+              Alert.alert('Success', 'Booking request submitted successfully!');
+              if (activeTab === 'bookings') {
+                await loadMyBookings();
+              }
+            } catch (error: any) {
+              console.error('Booking submission failed:', error);
+              Alert.alert(
+                'Booking Failed',
+                error?.response?.data?.message || 'Unable to submit booking request. Please try again.',
+              );
+            } finally {
+              setSubmittingBooking(false);
+            }
           },
         },
       ]
@@ -289,9 +368,32 @@ const CareReceiverBookingsScreen: React.FC = () => {
     setSelectedCaregiver(null);
     setBookingDate(new Date());
     setBookingTime(new Date());
+    setDurationHours(1);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
     setBookingLocation(careReceiverProfile?.address || '');
     setBookingNotes('');
     setServiceType('General Care');
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+
+    if (event?.type === 'set' && selectedDate) {
+      setBookingDate(selectedDate);
+    }
+  };
+
+  const handleTimeChange = (event: any, selectedTime?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
+
+    if (event?.type === 'set' && selectedTime) {
+      setBookingTime(selectedTime);
+    }
   };
 
 
@@ -823,12 +925,12 @@ const CareReceiverBookingsScreen: React.FC = () => {
         visible={bookingModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setBookingModalVisible(false)}>
+        onRequestClose={closeBookingModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Book Caregiver</Text>
-              <TouchableOpacity onPress={() => setBookingModalVisible(false)}>
+              <TouchableOpacity onPress={closeBookingModal}>
                 <Icon name="x" size={24} color="#374151" />
               </TouchableOpacity>
             </View>
@@ -886,7 +988,14 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 <Text style={styles.formLabel}>Date</Text>
                 <TouchableOpacity
                   style={styles.dateTimeButton}
-                  onPress={() => setShowDatePicker(true)}>
+                  onPress={() => {
+                    if (Platform.OS === 'ios') {
+                      setShowDatePicker(prev => !prev);
+                      setShowTimePicker(false);
+                    } else {
+                      setShowDatePicker(true);
+                    }
+                  }}>
                   <Icon name="calendar" size={20} color="#2563eb" />
                   <Text style={styles.dateTimeText}>
                     {bookingDate.toLocaleDateString('en-US', {
@@ -897,13 +1006,39 @@ const CareReceiverBookingsScreen: React.FC = () => {
                     })}
                   </Text>
                 </TouchableOpacity>
+                {Platform.OS === 'ios' && showDatePicker && (
+                  <View style={styles.inlinePickerCard}>
+                    <View style={styles.inlinePickerHeader}>
+                      <Text style={styles.inlinePickerTitle}>Select Date</Text>
+                      <TouchableOpacity
+                        style={styles.inlinePickerDoneButton}
+                        onPress={() => setShowDatePicker(false)}>
+                        <Text style={styles.inlinePickerDoneText}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      value={bookingDate}
+                      mode="date"
+                      display="spinner"
+                      minimumDate={new Date()}
+                      onChange={handleDateChange}
+                    />
+                  </View>
+                )}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Time</Text>
                 <TouchableOpacity
                   style={styles.dateTimeButton}
-                  onPress={() => setShowTimePicker(true)}>
+                  onPress={() => {
+                    if (Platform.OS === 'ios') {
+                      setShowTimePicker(prev => !prev);
+                      setShowDatePicker(false);
+                    } else {
+                      setShowTimePicker(true);
+                    }
+                  }}>
                   <Icon name="clock" size={20} color="#2563eb" />
                   <Text style={styles.dateTimeText}>
                     {bookingTime.toLocaleTimeString('en-US', {
@@ -912,6 +1047,53 @@ const CareReceiverBookingsScreen: React.FC = () => {
                     })}
                   </Text>
                 </TouchableOpacity>
+                {Platform.OS === 'ios' && showTimePicker && (
+                  <View style={styles.inlinePickerCard}>
+                    <View style={styles.inlinePickerHeader}>
+                      <Text style={styles.inlinePickerTitle}>Select Time</Text>
+                      <TouchableOpacity
+                        style={styles.inlinePickerDoneButton}
+                        onPress={() => setShowTimePicker(false)}>
+                        <Text style={styles.inlinePickerDoneText}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      value={bookingTime}
+                      mode="time"
+                      display="spinner"
+                      onChange={handleTimeChange}
+                    />
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Duration</Text>
+                <View style={styles.durationContainer}>
+                  {[1, 2, 3, 4, 6, 8].map(hours => (
+                    <TouchableOpacity
+                      key={hours}
+                      style={[
+                        styles.durationChip,
+                        durationHours === hours && styles.durationChipActive,
+                      ]}
+                      onPress={() => setDurationHours(hours)}>
+                      <Text
+                        style={[
+                          styles.durationChipText,
+                          durationHours === hours && styles.durationChipTextActive,
+                        ]}>
+                        {hours}h
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.amountSummaryCard}>
+                  <Text style={styles.amountSummaryText}>
+                    Rs.{selectedCaregiver?.hourlyRate || 0}/hour x {durationHours}h
+                  </Text>
+                  <Text style={styles.amountSummaryValue}>Rs.{calculatedAmount}</Text>
+                </View>
               </View>
 
               <View style={styles.formGroup}>
@@ -943,13 +1125,18 @@ const CareReceiverBookingsScreen: React.FC = () => {
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setBookingModalVisible(false)}>
+                onPress={closeBookingModal}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.confirmButton}
+                disabled={submittingBooking}
                 onPress={handleSubmitBooking}>
-                <Text style={styles.confirmButtonText}>Submit Request</Text>
+                {submittingBooking ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.confirmButtonText}>Submit Request</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -1153,34 +1340,25 @@ const CareReceiverBookingsScreen: React.FC = () => {
         </View>
       </Modal>
 
-      {showDatePicker && (
+      {showDatePicker && Platform.OS === 'android' && (
         <DateTimePicker
           value={bookingDate}
           mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          display="default"
           minimumDate={new Date()}
-          onChange={(event, selectedDate) => {
-            setShowDatePicker(Platform.OS === 'ios');
-            if (selectedDate) {
-              setBookingDate(selectedDate);
-            }
-          }}
+          onChange={handleDateChange}
         />
       )}
 
-      {showTimePicker && (
+      {showTimePicker && Platform.OS === 'android' && (
         <DateTimePicker
           value={bookingTime}
           mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event, selectedTime) => {
-            setShowTimePicker(Platform.OS === 'ios');
-            if (selectedTime) {
-              setBookingTime(selectedTime);
-            }
-          }}
+          display="default"
+          onChange={handleTimeChange}
         />
       )}
+
     </SafeAreaView>
   );
 };
@@ -1695,6 +1873,39 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
+  inlinePickerCard: {
+    marginTop: 10,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  inlinePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  inlinePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  inlinePickerDoneButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#2563eb',
+  },
+  inlinePickerDoneText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
   modalContainer: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
@@ -1805,6 +2016,54 @@ const styles = StyleSheet.create({
   },
   serviceTypeTextActive: {
     color: '#fff',
+  },
+  durationContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  durationChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  durationChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  durationChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  durationChipTextActive: {
+    color: '#fff',
+  },
+  amountSummaryCard: {
+    marginTop: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  amountSummaryText: {
+    fontSize: 14,
+    color: '#1e40af',
+    fontWeight: '500',
+  },
+  amountSummaryValue: {
+    fontSize: 18,
+    color: '#1d4ed8',
+    fontWeight: '700',
   },
   dateTimeButton: {
     flexDirection: 'row',
