@@ -42,7 +42,6 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
     hours: 0,
     rating: 0,
   });
-  const [performanceMetrics, setPerformanceMetrics] = useState<any[]>([]);
   const [clientSatisfaction, setClientSatisfaction] = useState<any[]>([]);
   const [allFeedback, setAllFeedback] = useState<any[]>([]);
   const [allSchedule, setAllSchedule] = useState<any[]>([]);
@@ -64,12 +63,6 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
       const statsResponse = await api.getCaregiverDashboardStats();
       console.log('Stats response:', statsResponse);
       setDashboardStats(statsResponse || { earnings: 0, clients: 0, hours: 0, rating: 0 });
-      
-      // Fetch performance metrics
-      const performanceResponse = await api.getCaregiverPerformance();
-      console.log('Performance response:', performanceResponse);
-      const metrics = performanceResponse?.metrics || [];
-      setPerformanceMetrics(Array.isArray(metrics) ? metrics : []);
       
       // Fetch client satisfaction
       const satisfactionResponse = await api.getCaregiverClientSatisfaction();
@@ -108,7 +101,6 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
       // Set empty arrays to prevent undefined errors
       setAllFeedback([]);
       setAllSchedule([]);
-      setPerformanceMetrics([]);
       setClientSatisfaction([]);
     } finally {
       setLoading(false);
@@ -301,46 +293,6 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
             </View>
           )}
         </SectionCard>
-
-        {/* Performance Overview */}
-        {performanceMetrics.length > 0 && (
-          <SectionCard title="Performance Overview" style={styles.section}>
-            <View style={styles.performanceGrid}>
-              {performanceMetrics.map((metric, index) => (
-                <View key={index} style={styles.performanceCard}>
-                  <View style={styles.performanceHeader}>
-                    <View
-                      style={[
-                        styles.performanceIcon,
-                        {backgroundColor: `${metric.color}20`},
-                      ]}>
-                      <Icon name={metric.icon} size={18} color={metric.color} />
-                    </View>
-                    <Text
-                      style={[styles.performanceValue, {color: metric.color}]}>
-                      {metric.value}%
-                    </Text>
-                  </View>
-                  <Text style={styles.performanceLabel}>{metric.label}</Text>
-                  <View style={styles.performanceBar}>
-                    <View
-                      style={[
-                        styles.performanceProgress,
-                        {
-                          width: `${metric.value}%`,
-                          backgroundColor: metric.color,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.performanceTarget}>
-                    Target: {metric.target}%
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </SectionCard>
-        )}
 
         {/* Client Satisfaction */}
         {clientSatisfaction.length > 0 && (
@@ -628,58 +580,6 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 12,
     color: '#6b7280',
-  },
-  performanceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  performanceCard: {
-    flex: 1,
-    minWidth: '47%',
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  performanceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  performanceIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  performanceValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  performanceLabel: {
-    fontSize: 13,
-    color: '#374151',
-    fontWeight: '500',
-    marginBottom: 12,
-  },
-  performanceBar: {
-    height: 6,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  performanceProgress: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  performanceTarget: {
-    fontSize: 11,
-    color: '#9ca3af',
   },
   feedbackItem: {
     backgroundColor: '#f9fafb',

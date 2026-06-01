@@ -65,19 +65,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   };
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
-    if (!email.includes('@')) {
+    if (!normalizedEmail.includes('@')) {
       Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
 
     setLoading(true);
     try {
-      await login({email, password});
+      await login({email: normalizedEmail, password});
       // Navigation will be handled by the navigation structure
     } catch (error: any) {
       Alert.alert(
@@ -93,10 +95,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setMenuVisible(false);
     switch (option) {
       case 'about':
-        Alert.alert('About Us', 'CareConnect - Connecting caregivers with those who need care.');
+        navigation.navigate('AboutUs');
         break;
       case 'contact':
-        Alert.alert('Contact', 'Email: support@careconnect.com\nPhone: +94 11 234 5678');
+        navigation.navigate('ContactUs');
         break;
       case 'help':
         Alert.alert('Help', 'For assistance, please contact our support team.');
@@ -201,6 +203,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoComplete="email"
+                    returnKeyType="next"
                   />
                 </View>
               </View>
@@ -217,6 +220,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                     onChangeText={handlePasswordChange}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
+                    returnKeyType="go"
+                    onSubmitEditing={handleLogin}
                   />
                   <TouchableOpacity
                     onPress={() => setShowPassword(!showPassword)}

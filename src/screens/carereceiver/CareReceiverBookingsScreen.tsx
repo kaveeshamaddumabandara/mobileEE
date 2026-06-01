@@ -22,6 +22,7 @@ import ApiService from '../../services/api';
 import {Caregiver, CareReceiver} from '../../types';
 import SideMenu from '../../components/SideMenu';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import {useStripe} from '@stripe/stripe-react-native';
 
 type CareReceiverBookingsScreenNavigationProp = NativeStackNavigationProp<
   CareReceiverTabParamList,
@@ -30,6 +31,7 @@ type CareReceiverBookingsScreenNavigationProp = NativeStackNavigationProp<
 
 const CareReceiverBookingsScreen: React.FC = () => {
   const navigation = useNavigation<CareReceiverBookingsScreenNavigationProp>();
+  const {initPaymentSheet, presentPaymentSheet} = useStripe();
   const [caregivers, setCaregivers] = useState<Caregiver[]>([]);
   const [filteredCaregivers, setFilteredCaregivers] = useState<Caregiver[]>([]);
   const [recommendedCaregivers, setRecommendedCaregivers] = useState<Caregiver[]>([]);
@@ -69,6 +71,12 @@ const CareReceiverBookingsScreen: React.FC = () => {
   // Profile modal state
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [viewingCaregiver, setViewingCaregiver] = useState<Caregiver | null>(null);
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [reviewTargetBooking, setReviewTargetBooking] = useState<any | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewModalMode, setReviewModalMode] = useState<'create' | 'view'>('create');
 
   const loadData = React.useCallback(async () => {
     await Promise.all([loadCaregivers(), loadProfile()]);
@@ -281,6 +289,8 @@ const CareReceiverBookingsScreen: React.FC = () => {
   };
 
   const calculatedAmount = (selectedCaregiver?.hourlyRate || 0) * durationHours;
+  const advanceAmount = Number((calculatedAmount * 0.5).toFixed(2));
+  const remainingAmount = Number((calculatedAmount - advanceAmount).toFixed(2));
 
   const handleSubmitBooking = () => {
     if (!selectedCaregiver?._id) {
@@ -315,18 +325,18 @@ const CareReceiverBookingsScreen: React.FC = () => {
 
     console.log('Booking Data:', bookingData);
     
-    Alert.alert(
-      'Booking Request',
-      `Do you want to book ${selectedCaregiver?.name} for ${serviceType} on ${bookingDate.toLocaleDateString()} at ${bookingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} for ${durationHours} hour${durationHours > 1 ? 's' : ''}?\n\nTotal: Rs.${calculatedAmount}`,
+      Alert.alert(
+      'Pay 50% to Confirm Booking',
+      `Do you want to book ${selectedCaregiver?.name} for ${serviceType} on ${bookingDate.toLocaleDateString()} at ${bookingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} for ${durationHours} hour${durationHours > 1 ? 's' : ''}?\n\nTotal: Rs.${calculatedAmount}\nPay now (50% online): Rs.${advanceAmount}\nPay later (physical): Rs.${remainingAmount}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm',
+          text: 'Pay Now',
           onPress: async () => {
             try {
               setSubmittingBooking(true);
 
-              await ApiService.createBooking({
+              const bookingPayload = {
                 caregiverId: selectedCaregiver._id,
                 serviceType: getBookingServiceType(serviceType),
                 date: bookingDate,
@@ -340,12 +350,47 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 location: bookingLocation.trim(),
                 needs: bookingNotes.trim(),
                 hourlyRate,
-                totalAmount: calculatedAmount,
+              };
+
+              const paymentIntent = await ApiService.createBookingPaymentIntent(bookingPayload);
+
+              const initResult = await initPaymentSheet({
+                merchantDisplayName: 'CareConnect',
+                paymentIntentClientSecret: paymentIntent.clientSecret,
+                allowsDelayedPaymentMethods: false,
+                defaultBillingDetails: {
+                  name: careReceiverProfile?.name || 'Care Receiver',
+                  email: careReceiverProfile?.email,
+                  phone: careReceiverProfile?.phone,
+                },
+              });
+
+              if (initResult.error) {
+                throw new Error(initResult.error.message);
+              }
+
+              const paymentResult = await presentPaymentSheet();
+
+              if (paymentResult.error) {
+                if (paymentResult.error.code === 'Canceled') {
+                  Alert.alert('Payment Cancelled', 'Booking was not created because payment was cancelled.');
+                  return;
+                }
+                throw new Error(paymentResult.error.message);
+              }
+
+              await ApiService.createBooking({
+                ...bookingPayload,
+                totalAmount: paymentIntent.totalAmount,
+                paymentIntentId: paymentIntent.paymentIntentId,
               });
 
               closeBookingModal();
               resetBookingForm();
-              Alert.alert('Success', 'Booking request submitted successfully!');
+              Alert.alert(
+                'Success',
+                `Booking request submitted successfully!\n\nPaid online: Rs.${paymentIntent.advanceAmount}\nRemaining (physical): Rs.${paymentIntent.remainingAmount}`,
+              );
               if (activeTab === 'bookings') {
                 await loadMyBookings();
               }
@@ -393,6 +438,102 @@ const CareReceiverBookingsScreen: React.FC = () => {
 
     if (event?.type === 'set' && selectedTime) {
       setBookingTime(selectedTime);
+    }
+  };
+
+  const handleOpenReviewModal = (booking: any) => {
+    setReviewModalMode('create');
+    setReviewTargetBooking(booking);
+    setReviewRating(5);
+    setReviewComment('');
+    setReviewModalVisible(true);
+  };
+
+  const handleOpenExistingReview = async (booking: any) => {
+    try {
+      setSubmittingReview(true);
+      const existingReview = await ApiService.getMyBookingReview(booking._id);
+      setReviewModalMode('view');
+      setReviewTargetBooking(booking);
+      setReviewRating(existingReview?.rating || 5);
+      setReviewComment(existingReview?.comment || existingReview?.message || '');
+      setReviewModalVisible(true);
+    } catch (error: any) {
+      console.error('Failed to load existing review:', error);
+      Alert.alert(
+        'Unable to Load Review',
+        error?.response?.data?.message || 'Could not load your review for this booking.',
+      );
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleSubmitBookingReview = async () => {
+    if (!reviewTargetBooking?._id) {
+      Alert.alert('Error', 'Invalid booking selected for review');
+      return;
+    }
+
+    if (!reviewComment.trim()) {
+      Alert.alert('Required', 'Please write your review before submitting');
+      return;
+    }
+
+    try {
+      setSubmittingReview(true);
+      await ApiService.submitBookingReview({
+        bookingId: reviewTargetBooking._id,
+        rating: reviewRating,
+        review: reviewComment.trim(),
+      });
+
+      Alert.alert('Success', 'Your review has been submitted successfully.');
+      setReviewModalVisible(false);
+      setReviewTargetBooking(null);
+      await loadMyBookings();
+    } catch (error: any) {
+      console.error('Failed to submit booking review:', error);
+      Alert.alert(
+        'Review Failed',
+        error?.response?.data?.message || 'Unable to submit review. Please try again.',
+      );
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleUpdateBookingReview = async () => {
+    if (!reviewTargetBooking?._id) {
+      Alert.alert('Error', 'Invalid booking selected for review update');
+      return;
+    }
+
+    if (!reviewComment.trim()) {
+      Alert.alert('Required', 'Please write your review before updating');
+      return;
+    }
+
+    try {
+      setSubmittingReview(true);
+      await ApiService.updateMyBookingReview({
+        bookingId: reviewTargetBooking._id,
+        rating: reviewRating,
+        review: reviewComment.trim(),
+      });
+
+      Alert.alert('Updated', 'Your review has been updated successfully.');
+      setReviewModalVisible(false);
+      setReviewTargetBooking(null);
+      await loadMyBookings();
+    } catch (error: any) {
+      console.error('Failed to update booking review:', error);
+      Alert.alert(
+        'Update Failed',
+        error?.response?.data?.message || 'Unable to update review. Please try again.',
+      );
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -906,6 +1047,57 @@ const CareReceiverBookingsScreen: React.FC = () => {
                     <Icon name="map-pin" size={14} color="#6b7280" />
                     <Text style={styles.locationText}>{booking.location}</Text>
                   </View>
+                  <View style={styles.paymentSplitRow}>
+                    <Text style={styles.paymentSplitText}>
+                      Online 50%: Rs.{Number(booking.advanceAmount || 0).toLocaleString()} ({booking.advancePaymentStatus || 'pending'})
+                    </Text>
+                    <View style={styles.physicalPaymentStatusRow}>
+                      <Text style={styles.paymentSplitText}>
+                        Physical 50%: Rs.{Number(booking.remainingAmount || 0).toLocaleString()}
+                      </Text>
+                      <View
+                        style={[
+                          styles.physicalPaymentTag,
+                          booking.remainingPaymentStatus === 'completed_physical'
+                            ? styles.physicalPaymentDoneTag
+                            : styles.physicalPaymentPendingTag,
+                        ]}>
+                        <Text
+                          style={[
+                            styles.physicalPaymentTagText,
+                            booking.remainingPaymentStatus === 'completed_physical'
+                              ? styles.physicalPaymentDoneTagText
+                              : styles.physicalPaymentPendingTagText,
+                          ]}>
+                          {booking.remainingPaymentStatus === 'completed_physical'
+                            ? 'Physical Payment Done'
+                            : 'Physical Payment Pending'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.reviewActionRow}>
+                    {booking.canReview ? (
+                      <TouchableOpacity
+                        style={styles.writeReviewButton}
+                        onPress={() => handleOpenReviewModal(booking)}>
+                        <Icon name="edit-3" size={15} color="#ffffff" />
+                        <Text style={styles.writeReviewButtonText}>Write a review</Text>
+                      </TouchableOpacity>
+                    ) : booking.hasReview ? (
+                      <TouchableOpacity
+                        style={styles.viewReviewButton}
+                        onPress={() => handleOpenExistingReview(booking)}>
+                        <Icon name="eye" size={14} color="#166534" />
+                        <Text style={styles.viewReviewButtonText}>View your review</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.reviewPendingTag}>
+                        <Icon name="clock" size={14} color="#92400e" />
+                        <Text style={styles.reviewPendingTagText}>Review available after completion</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
               ))}
             </View>
@@ -1088,10 +1280,14 @@ const CareReceiverBookingsScreen: React.FC = () => {
                     </TouchableOpacity>
                   ))}
                 </View>
-                <View style={styles.amountSummaryCard}>
-                  <Text style={styles.amountSummaryText}>
-                    Rs.{selectedCaregiver?.hourlyRate || 0}/hour x {durationHours}h
-                  </Text>
+                  <View style={styles.amountSummaryCard}>
+                  <View>
+                    <Text style={styles.amountSummaryText}>
+                      Rs.{selectedCaregiver?.hourlyRate || 0}/hour x {durationHours}h
+                    </Text>
+                    <Text style={styles.onlinePaymentText}>Pay now (50% online): Rs.{advanceAmount}</Text>
+                    <Text style={styles.physicalPaymentText}>Pay later (physical): Rs.{remainingAmount}</Text>
+                  </View>
                   <Text style={styles.amountSummaryValue}>Rs.{calculatedAmount}</Text>
                 </View>
               </View>
@@ -1135,7 +1331,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 {submittingBooking ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.confirmButtonText}>Submit Request</Text>
+                  <Text style={styles.confirmButtonText}>Pay 50% & Submit</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1359,6 +1555,81 @@ const CareReceiverBookingsScreen: React.FC = () => {
         />
       )}
 
+      <Modal
+        visible={reviewModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setReviewModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {reviewModalMode === 'view' ? 'Your Review' : 'Write a Review'}
+              </Text>
+              <TouchableOpacity onPress={() => setReviewModalVisible(false)}>
+                <Icon name="x" size={24} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              {reviewTargetBooking && (
+                <View style={styles.reviewModalCard}>
+                  <Text style={styles.reviewModalCaregiverName}>{reviewTargetBooking.caregiverName}</Text>
+                  <Text style={styles.reviewModalBookingMeta}>
+                    {new Date(reviewTargetBooking.date).toLocaleDateString()} • {reviewTargetBooking.serviceType}
+                  </Text>
+
+                  <Text style={styles.formLabel}>Your Rating</Text>
+                  <View style={styles.reviewStarRow}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
+                        <Icon
+                          name="star"
+                          size={30}
+                          color={star <= reviewRating ? '#f59e0b' : '#d1d5db'}
+                          style={styles.reviewStarButton}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.formLabel}>Your Review</Text>
+                  <TextInput
+                    style={styles.reviewInput}
+                    placeholder="Share your experience with this caregiver"
+                    value={reviewComment}
+                    onChangeText={setReviewComment}
+                    multiline
+                    textAlignVertical="top"
+                    maxLength={1000}
+                  />
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setReviewModalVisible(false)}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmButton, submittingReview && styles.disabledButton]}
+                onPress={reviewModalMode === 'view' ? handleUpdateBookingReview : handleSubmitBookingReview}
+                disabled={submittingReview}>
+                {submittingReview ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.confirmButtonText}>
+                    {reviewModalMode === 'view' ? 'Update Review' : 'Submit Review'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 };
@@ -1367,7 +1638,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9fafb',
-    paddingBottom: 100, // Space for floating tab bar
+    paddingBottom: 24,
   },
   loadingContainer: {
     flex: 1,
@@ -2060,6 +2331,18 @@ const styles = StyleSheet.create({
     color: '#1e40af',
     fontWeight: '500',
   },
+  onlinePaymentText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#1d4ed8',
+    fontWeight: '600',
+  },
+  physicalPaymentText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#4b5563',
+    fontWeight: '500',
+  },
   amountSummaryValue: {
     fontSize: 18,
     color: '#1d4ed8',
@@ -2250,6 +2533,148 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
     flex: 1,
+  },
+  paymentSplitRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    gap: 4,
+  },
+  paymentSplitText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  physicalPaymentStatusRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  physicalPaymentTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  physicalPaymentDoneTag: {
+    backgroundColor: '#dcfce7',
+  },
+  physicalPaymentPendingTag: {
+    backgroundColor: '#fef3c7',
+  },
+  physicalPaymentTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  physicalPaymentDoneTagText: {
+    color: '#166534',
+  },
+  physicalPaymentPendingTagText: {
+    color: '#92400e',
+  },
+  reviewActionRow: {
+    marginTop: 10,
+  },
+  writeReviewButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  writeReviewButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  reviewDoneTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#dcfce7',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  reviewDoneTagText: {
+    color: '#166534',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  viewReviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#dcfce7',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  viewReviewButtonText: {
+    color: '#166534',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reviewPendingTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#fef3c7',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  reviewPendingTagText: {
+    color: '#92400e',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reviewModalCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 14,
+  },
+  reviewModalCaregiverName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  reviewModalBookingMeta: {
+    marginTop: 4,
+    marginBottom: 14,
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  reviewStarRow: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+  reviewStarButton: {
+    marginRight: 10,
+  },
+  reviewInput: {
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: '#f9fafb',
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
   // Profile Modal Styles
   profileHeader: {
