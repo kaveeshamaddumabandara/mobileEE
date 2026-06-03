@@ -12,6 +12,7 @@ import CaregiverRegisterScreen from '../screens/common/CaregiverRegisterScreen';
 import CareReceiverRegisterScreen from '../screens/common/CareReceiverRegisterScreen';
 import ForgotPasswordScreen from '../screens/common/ForgotPasswordScreen';
 import ContactUsScreen from '../screens/common/ContactUsScreen';
+import AboutUsScreen from '../screens/common/AboutUsScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
@@ -61,6 +62,7 @@ const AuthNavigator: React.FC = () => {
       />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="ContactUs" component={ContactUsScreen} />
+      <Stack.Screen name="AboutUs" component={AboutUsScreen} />
     </Stack.Navigator>
   );
 };

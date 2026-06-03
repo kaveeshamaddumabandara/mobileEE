@@ -22,6 +22,21 @@ interface SideMenuProps {
 const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
   const {user, logout} = useAuth();
 
+  const navigateIfAvailable = (routeName: string) => {
+    let currentNav: any = navigation;
+
+    while (currentNav) {
+      const state = currentNav.getState?.();
+      if (state?.routeNames?.includes(routeName)) {
+        currentNav.navigate(routeName);
+        return true;
+      }
+      currentNav = currentNav.getParent?.();
+    }
+
+    return false;
+  };
+
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       {text: 'Cancel', style: 'cancel'},
@@ -40,28 +55,34 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
     onClose();
     switch (option) {
       case 'profile':
-        navigation.navigate('Profile');
+        navigateIfAvailable('Profile');
         break;
       case 'dashboard':
-        navigation.navigate('Dashboard');
+        navigateIfAvailable('Dashboard');
         break;
       case 'bookings':
-        navigation.navigate('Bookings');
-        break;
-      case 'careDocumentation':
-        navigation.navigate('CareDocumentation');
-        break;
-      case 'payments':
-        navigation.navigate('Payments');
-        break;
-      case 'about':
-        Alert.alert(
-          'About Us',
-          'CareConnect - Connecting caregivers with those who need care.',
+        navigateIfAvailable(
+          user?.role === 'caregiver' ? 'Bookings' : 'FindCaregivers'
         );
         break;
+      case 'careDocumentation':
+        navigateIfAvailable('CareDocumentation');
+        break;
+      case 'payments':
+        if (user?.role === 'caregiver') {
+          navigateIfAvailable('Payments');
+        }
+        break;
+      case 'about':
+        navigateIfAvailable('AboutUs');
+        break;
+      case 'reviews':
+        if (user?.role === 'carereceiver') {
+          navigateIfAvailable('ReviewsRatings');
+        }
+        break;
       case 'contact':
-        navigation.navigate('ContactUs');
+        navigateIfAvailable('ContactUs');
         break;
       case 'help':
         Alert.alert('Help', 'For assistance, please contact our support team.');
@@ -151,6 +172,18 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
             <Icon name="chevron-right" size={16} color="#9ca3af" />
           </TouchableOpacity>
 
+          {user?.role === 'carereceiver' && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleMenuOption('reviews')}>
+              <View style={styles.iconContainer}>
+                <Icon name="star" size={20} color="#2563eb" />
+              </View>
+              <Text style={styles.menuItemText}>Ratings & Reviews</Text>
+              <Icon name="chevron-right" size={16} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
+
           {user?.role === 'caregiver' && (
             <TouchableOpacity
               style={styles.menuItem}
@@ -163,15 +196,17 @@ const SideMenu: React.FC<SideMenuProps> = ({visible, onClose, navigation}) => {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => handleMenuOption('payments')}>
-            <View style={styles.iconContainer}>
-              <Icon name="credit-card" size={20} color={user?.role === 'caregiver' ? '#8b5cf6' : '#2563eb'} />
-            </View>
-            <Text style={styles.menuItemText}>Payments</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
+          {user?.role === 'caregiver' && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleMenuOption('payments')}>
+              <View style={styles.iconContainer}>
+                <Icon name="credit-card" size={20} color="#8b5cf6" />
+              </View>
+              <Text style={styles.menuItemText}>Payments</Text>
+              <Icon name="chevron-right" size={16} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
 
           <View style={styles.menuDivider} />
 

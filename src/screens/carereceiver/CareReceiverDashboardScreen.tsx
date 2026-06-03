@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollViewContent: {
-    paddingBottom: 100, // Space for floating tab bar
+    paddingBottom: 24,
   },
   welcomeCardContainer: {
     paddingHorizontal: 16,

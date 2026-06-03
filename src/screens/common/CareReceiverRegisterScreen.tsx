@@ -55,6 +55,35 @@ const CareReceiverRegisterScreen: React.FC<
   });
   const [loading, setLoading] = useState(false);
 
+  const formatSriLankanPhone = (value: string) => {
+    let digits = value.replace(/\D/g, '');
+
+    if (digits.startsWith('94')) {
+      digits = `0${digits.slice(2)}`;
+    }
+
+    if (!digits.startsWith('0') && digits.length > 0) {
+      digits = `0${digits}`;
+    }
+
+    digits = digits.slice(0, 10);
+
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
+    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+  };
+
+  const normalizeSriLankanPhone = (value: string) => {
+    let digits = value.replace(/\D/g, '');
+    if (digits.startsWith('94')) {
+      digits = `0${digits.slice(2)}`;
+    }
+    if (!digits.startsWith('0') && digits.length > 0) {
+      digits = `0${digits}`;
+    }
+    return digits.slice(0, 10);
+  };
+
   const calculatePasswordStrength = (pwd: string) => {
     let strength = 0;
     if (pwd.length >= 8) strength += 1;
@@ -87,10 +116,36 @@ const CareReceiverRegisterScreen: React.FC<
     if (
       !formData.name ||
       !formData.email ||
+      !formData.phone ||
+      !formData.dateOfBirth ||
+      !formData.address ||
+      !formData.city ||
+      !formData.district ||
       !formData.password ||
       !formData.confirmPassword
     ) {
       Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    if (
+      !formData.emergencyContactName ||
+      !formData.emergencyContactPhone ||
+      !formData.emergencyContactRelationship
+    ) {
+      Alert.alert('Error', 'Please complete all emergency contact fields');
+      return;
+    }
+
+    const normalizedPhone = normalizeSriLankanPhone(formData.phone);
+    if (!/^07\d{8}$/.test(normalizedPhone)) {
+      Alert.alert('Error', 'Please enter a valid Sri Lankan mobile number (07X XXX XXXX)');
+      return;
+    }
+
+    const normalizedEmergencyPhone = normalizeSriLankanPhone(formData.emergencyContactPhone);
+    if (!/^07\d{8}$/.test(normalizedEmergencyPhone)) {
+      Alert.alert('Error', 'Please enter a valid Sri Lankan emergency contact number (07X XXX XXXX)');
       return;
     }
 
@@ -115,15 +170,15 @@ const CareReceiverRegisterScreen: React.FC<
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        phone: formData.phone,
+        phone: normalizedPhone,
         role: 'carereceiver',
-        dateOfBirth: formData.dateOfBirth || undefined,
-        address: formData.address || undefined,
-        city: formData.city || undefined,
-        district: formData.district || undefined,
-        emergencyContactName: formData.emergencyContactName || undefined,
-        emergencyContactPhone: formData.emergencyContactPhone || undefined,
-        emergencyContactRelationship: formData.emergencyContactRelationship || undefined,
+        dateOfBirth: formData.dateOfBirth,
+        address: formData.address,
+        city: formData.city,
+        district: formData.district,
+        emergencyContactName: formData.emergencyContactName,
+        emergencyContactPhone: normalizedEmergencyPhone,
+        emergencyContactRelationship: formData.emergencyContactRelationship,
         medicalConditions: formData.medicalConditions || undefined,
         careRequirements: formData.careRequirements || undefined,
       });
@@ -141,6 +196,11 @@ const CareReceiverRegisterScreen: React.FC<
   };
 
   const updateFormData = (field: string, value: string) => {
+    if (field === 'phone' || field === 'emergencyContactPhone') {
+      setFormData(prev => ({...prev, [field]: formatSriLankanPhone(value)}));
+      return;
+    }
+
     setFormData(prev => ({...prev, [field]: value}));
     
     if (field === 'password') {
@@ -304,10 +364,11 @@ const CareReceiverRegisterScreen: React.FC<
                     <Text style={styles.label}>Phone *</Text>
                     <TextInput
                       style={styles.input}
-                      placeholder="Enter your phone number"
+                      placeholder="071 234 5678"
                       value={formData.phone}
                       onChangeText={value => updateFormData('phone', value)}
                       keyboardType="phone-pad"
+                      maxLength={12}
                     />
                   </View>
 
@@ -331,7 +392,7 @@ const CareReceiverRegisterScreen: React.FC<
                 </View>
                 <View style={styles.sectionContent}>
                   <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Street Address</Text>
+                    <Text style={styles.label}>Street Address *</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="Enter your address"
@@ -342,7 +403,7 @@ const CareReceiverRegisterScreen: React.FC<
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.label}>City</Text>
+                    <Text style={styles.label}>City *</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="Enter your city"
@@ -352,7 +413,7 @@ const CareReceiverRegisterScreen: React.FC<
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.label}>District</Text>
+                    <Text style={styles.label}>District *</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="Enter your district"
@@ -371,7 +432,7 @@ const CareReceiverRegisterScreen: React.FC<
                 </View>
                 <View style={styles.sectionContent}>
                   <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Contact Name</Text>
+                    <Text style={styles.label}>Contact Name *</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="Contact person name"
@@ -384,20 +445,21 @@ const CareReceiverRegisterScreen: React.FC<
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Contact Phone</Text>
+                    <Text style={styles.label}>Contact Phone *</Text>
                     <TextInput
                       style={styles.input}
-                      placeholder="Contact phone number"
+                      placeholder="071 234 5678"
                       value={formData.emergencyContactPhone}
                       onChangeText={value =>
                         updateFormData('emergencyContactPhone', value)
                       }
                       keyboardType="phone-pad"
+                      maxLength={12}
                     />
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Relationship</Text>
+                    <Text style={styles.label}>Relationship *</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="e.g., Spouse, Child, Parent"

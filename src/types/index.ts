@@ -6,6 +6,7 @@ export interface User {
   phone?: string;
   address?: string;
   isActive?: boolean;
+  registrationFeePaid?: boolean;
   profileImage?: string;
 }
 

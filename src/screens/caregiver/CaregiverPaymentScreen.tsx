@@ -8,9 +8,8 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
-  Modal,
-  TextInput,
   Dimensions,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation} from '@react-navigation/native';
@@ -19,6 +18,7 @@ import {CaregiverTabParamList} from '../../navigation/types';
 import SideMenu from '../../components/SideMenu';
 import api from '../../services/api';
 import {LineChart, PieChart} from 'react-native-chart-kit';
+import {useStripe} from '@stripe/stripe-react-native';
 
 type PaymentNavigationProp = NativeStackNavigationProp<
   CaregiverTabParamList,
@@ -27,35 +27,32 @@ type PaymentNavigationProp = NativeStackNavigationProp<
 
 const CaregiverPaymentScreen: React.FC = () => {
   const navigation = useNavigation<PaymentNavigationProp>();
+  const {initPaymentSheet, presentPaymentSheet} = useStripe();
   const [menuVisible, setMenuVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [showDataView, setShowDataView] = useState(false);
   
   // Registration fee state
   const [registrationFeePaid, setRegistrationFeePaid] = useState(false);
   const [registrationFeeAmount, setRegistrationFeeAmount] = useState(0);
   const [canMakeRegistrationPayment, setCanMakeRegistrationPayment] = useState(false);
-  const [approvalStatus, setApprovalStatus] = useState('');
-  
+
   // Commission state
   const [totalBookingsCompleted, setTotalBookingsCompleted] = useState(0);
   const [bookingsSinceLastPayment, setBookingsSinceLastPayment] = useState(0);
+  const [bookingsUntilNextPayment, setBookingsUntilNextPayment] = useState(20);
   const [commissionRate, setCommissionRate] = useState(0);
   const [commissionDue, setCommissionDue] = useState(0);
-  const [bookingsUntilNextPayment, setBookingsUntilNextPayment] = useState(5);
   const [requiresCommissionPayment, setRequiresCommissionPayment] = useState(false);
+
+  // Payment modal state
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [paymentType, setPaymentType] = useState<'registration' | 'commission'>('commission');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('Credit Card');
   
   // Payment history
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
-  
-  // Payment modal
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [paymentType, setPaymentType] = useState<'registration' | 'commission'>('registration');
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('Credit Card');
-  const [transactionReference, setTransactionReference] = useState('');
-  
-  // Data view toggle
-  const [showDataView, setShowDataView] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
 
@@ -72,20 +69,19 @@ const CaregiverPaymentScreen: React.FC = () => {
       setRegistrationFeePaid(registrationData.registrationFeePaid);
       setRegistrationFeeAmount(registrationData.registrationFeeAmount);
       setCanMakeRegistrationPayment(registrationData.canMakePayment);
-      setApprovalStatus(registrationData.approvalStatus);
-      
-      // Fetch commission status
-      const commissionData = await api.getCommissionStatus();
-      setTotalBookingsCompleted(commissionData.totalBookingsCompleted);
-      setBookingsSinceLastPayment(commissionData.bookingsSinceLastPayment);
-      setCommissionRate(commissionData.commissionRate);
-      setCommissionDue(commissionData.commissionDue);
-      setBookingsUntilNextPayment(commissionData.bookingsUntilNextPayment);
-      setRequiresCommissionPayment(commissionData.requiresPayment);
-      
+
       // Fetch payment history
       const history = await api.getCaregiverPaymentHistory();
       setPaymentHistory(history);
+
+      // Fetch commission status
+      const commissionStatus = await api.getCommissionStatus();
+      setTotalBookingsCompleted(commissionStatus.totalBookingsCompleted || 0);
+      setBookingsSinceLastPayment(commissionStatus.bookingsSinceLastPayment || 0);
+      setBookingsUntilNextPayment(commissionStatus.bookingsUntilNextPayment ?? 20);
+      setCommissionRate(commissionStatus.commissionRate || 0);
+      setCommissionDue(commissionStatus.commissionDue || 0);
+      setRequiresCommissionPayment(Boolean(commissionStatus.requiresPayment));
       
     } catch (error: any) {
       console.error('Error fetching payment data:', error);
@@ -96,48 +92,46 @@ const CaregiverPaymentScreen: React.FC = () => {
   };
 
   const handleMakePayment = (type: 'registration' | 'commission') => {
+    if (type === 'registration') {
+      processRegistrationPaymentWithStripe();
+      return;
+    }
+
     setPaymentType(type);
-    setTransactionReference('');
-    setSelectedPaymentMethod('Credit Card');
     setPaymentModalVisible(true);
   };
 
   const processPayment = async () => {
+    if (paymentType === 'registration') {
+      setPaymentModalVisible(false);
+      await processRegistrationPaymentWithStripe();
+      return;
+    }
+
     try {
       setProcessing(true);
-      
-      if (paymentType === 'registration') {
-        await api.processRegistrationFeePayment({
-          paymentMethod: selectedPaymentMethod,
-          transactionReference: transactionReference || undefined,
-        });
-        
-        Alert.alert(
-          'Success!',
-          'Registration fee paid successfully. Your account is now active!',
-          [{text: 'OK', onPress: () => {
-            setPaymentModalVisible(false);
+
+      await api.processCommissionPayment({
+        paymentMethod: selectedPaymentMethod,
+      });
+
+      setPaymentModalVisible(false);
+      Alert.alert('Success!', 'Commission paid successfully.', [
+        {
+          text: 'OK',
+          onPress: () => {
             fetchPaymentData();
-          }}]
-        );
-      } else {
-        await api.processCommissionPayment({
-          paymentMethod: selectedPaymentMethod,
-          transactionReference: transactionReference || undefined,
-        });
-        
-        Alert.alert(
-          'Success!',
-          'Commission payment processed successfully!',
-          [{text: 'OK', onPress: () => {
-            setPaymentModalVisible(false);
-            fetchPaymentData();
-          }}]
-        );
-      }
+          },
+        },
+      ]);
     } catch (error: any) {
-      console.error('Error processing payment:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to process payment');
+      console.error('Error processing commission payment:', error);
+      Alert.alert(
+        'Error',
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to process commission payment',
+      );
     } finally {
       setProcessing(false);
     }
@@ -145,10 +139,14 @@ const CaregiverPaymentScreen: React.FC = () => {
 
   const renderPaymentMethod = (method: string) => {
     const isSelected = selectedPaymentMethod === method;
+
     return (
       <TouchableOpacity
         key={method}
-        style={[styles.paymentMethodOption, isSelected && styles.paymentMethodSelected]}
+        style={[
+          styles.paymentMethodOption,
+          isSelected && styles.paymentMethodSelected,
+        ]}
         onPress={() => setSelectedPaymentMethod(method)}>
         <View style={[styles.radio, isSelected && styles.radioSelected]}>
           {isSelected && <View style={styles.radioInner} />}
@@ -156,6 +154,55 @@ const CaregiverPaymentScreen: React.FC = () => {
         <Text style={styles.paymentMethodText}>{method}</Text>
       </TouchableOpacity>
     );
+  };
+
+  const processRegistrationPaymentWithStripe = async () => {
+    try {
+      setProcessing(true);
+
+      const paymentIntent = await api.createRegistrationFeePaymentIntent();
+      const initResult = await initPaymentSheet({
+        merchantDisplayName: 'CareConnect',
+        paymentIntentClientSecret: paymentIntent.clientSecret,
+        allowsDelayedPaymentMethods: false,
+      });
+
+      if (initResult.error) {
+        throw new Error(initResult.error.message);
+      }
+
+      const paymentResult = await presentPaymentSheet();
+      if (paymentResult.error) {
+        if (paymentResult.error.code === 'Canceled') {
+          Alert.alert('Payment Cancelled', 'Registration fee payment was cancelled.');
+          return;
+        }
+        throw new Error(paymentResult.error.message);
+      }
+
+      await api.processRegistrationFeePayment({
+        paymentIntentId: paymentIntent.paymentIntentId,
+      });
+
+      Alert.alert('Success!', 'Registration fee paid successfully.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            fetchPaymentData();
+          },
+        },
+      ]);
+    } catch (error: any) {
+      console.error('Error processing registration payment:', error);
+      Alert.alert(
+        'Error',
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to process registration fee payment',
+      );
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const getPaymentChartData = () => {
@@ -192,23 +239,12 @@ const CaregiverPaymentScreen: React.FC = () => {
     const registrationTotal = paymentHistory
       .filter(p => p.paymentType === 'registration_fee')
       .reduce((sum, p) => sum + p.amount, 0);
-    
-    const commissionTotal = paymentHistory
-      .filter(p => p.paymentType === 'booking_commission')
-      .reduce((sum, p) => sum + p.amount, 0);
 
     return [
       {
         name: 'Registration',
         amount: registrationTotal,
         color: '#f59e0b',
-        legendFontColor: '#374151',
-        legendFontSize: 12,
-      },
-      {
-        name: 'Commission',
-        amount: commissionTotal,
-        color: '#8b5cf6',
         legendFontColor: '#374151',
         legendFontSize: 12,
       },
@@ -309,10 +345,6 @@ const CaregiverPaymentScreen: React.FC = () => {
                 <Text style={styles.dataLabel}>Can Make Payment:</Text>
                 <Text style={styles.dataValue}>{canMakeRegistrationPayment ? 'Yes' : 'No'}</Text>
               </View>
-              <View style={styles.dataRow}>
-                <Text style={styles.dataLabel}>Approval Status:</Text>
-                <Text style={styles.dataValue}>{approvalStatus || 'N/A'}</Text>
-              </View>
             </View>
 
             <View style={styles.dataSection}>
@@ -385,12 +417,14 @@ const CaregiverPaymentScreen: React.FC = () => {
               <Text style={styles.alertTitle}>Registration Fee Required</Text>
             </View>
             <Text style={styles.alertText}>
-              {approvalStatus === 'approved'
-                ? 'Your account has been approved! Please pay the registration fee to activate your account and start receiving bookings.'
-                : approvalStatus === 'pending'
-                ? 'Your account is pending admin approval. Once approved, you\'ll need to pay the registration fee.'
-                : 'Your account registration is incomplete.'}
+              Please pay the mandatory caregiver registration fee to activate your caregiver account and start receiving bookings.
             </Text>
+            <View style={styles.registrationRuleBox}>
+              <Icon name="info" size={16} color="#92400e" />
+              <Text style={styles.registrationRuleText}>
+                Flat platform registration fee: LKR 1,000
+              </Text>
+            </View>
             {canMakeRegistrationPayment && (
               <>
                 <View style={styles.feeBox}>
@@ -643,14 +677,6 @@ const CaregiverPaymentScreen: React.FC = () => {
                 {renderPaymentMethod('Bank Transfer')}
               </View>
 
-              <Text style={styles.inputLabel}>Transaction Reference (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter transaction reference"
-                value={transactionReference}
-                onChangeText={setTransactionReference}
-              />
-
               <View style={styles.paymentNote}>
                 <Icon name="info" size={16} color="#6b7280" />
                 <Text style={styles.paymentNoteText}>
@@ -752,6 +778,23 @@ const styles = StyleSheet.create({
     color: '#78350f',
     lineHeight: 20,
     marginBottom: 16,
+  },
+  registrationRuleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  registrationRuleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400e',
   },
   feeBox: {
     backgroundColor: '#fff',
@@ -1202,17 +1245,6 @@ const styles = StyleSheet.create({
   paymentMethodText: {
     fontSize: 15,
     color: '#374151',
-  },
-  input: {
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#111827',
-    marginBottom: 20,
   },
   paymentNote: {
     flexDirection: 'row',

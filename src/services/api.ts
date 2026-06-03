@@ -319,6 +319,46 @@ class ApiService {
     return response.data;
   }
 
+  async submitCaregiverReview(data: {
+    caregiverName: string;
+    rating: number;
+    review: string;
+  }): Promise<any> {
+    const response = await this.api.post('/feedback/caregiver-review', data);
+    return response.data;
+  }
+
+  async submitBookingReview(data: {
+    bookingId: string;
+    rating: number;
+    review: string;
+  }): Promise<any> {
+    const response = await this.api.post('/feedback/booking-review', data);
+    return response.data;
+  }
+
+  async getMyBookingReview(bookingId: string): Promise<any> {
+    const response = await this.api.get(`/feedback/booking-review/${bookingId}`);
+    return response.data.data;
+  }
+
+  async updateMyBookingReview(data: {
+    bookingId: string;
+    rating: number;
+    review: string;
+  }): Promise<any> {
+    const response = await this.api.put(`/feedback/booking-review/${data.bookingId}`, {
+      rating: data.rating,
+      review: data.review,
+    });
+    return response.data;
+  }
+
+  async getMyCaregiverReviews(): Promise<any[]> {
+    const response = await this.api.get('/feedback/my-caregiver-reviews');
+    return response.data.data;
+  }
+
   // Dashboard endpoints
   async getDashboardStats(): Promise<any> {
     const response = await this.api.get('/dashboard/stats');
@@ -385,6 +425,32 @@ class ApiService {
   }
 
   // Booking creation (Care Receiver)
+  async getStripeConfig(): Promise<{publishableKey: string}> {
+    const response = await this.api.get('/payments/stripe/config');
+    return response.data.data;
+  }
+
+  async createBookingPaymentIntent(bookingData: {
+    caregiverId: string;
+    serviceType: string;
+    date: Date;
+    startTime: string;
+    endTime: string;
+    duration?: number;
+    location: string;
+    needs?: string;
+    hourlyRate: number;
+  }): Promise<{
+    paymentIntentId: string;
+    clientSecret: string;
+    totalAmount: number;
+    advanceAmount: number;
+    remainingAmount: number;
+  }> {
+    const response = await this.api.post('/carereceiver/bookings/payment-intent', bookingData);
+    return response.data.data;
+  }
+
   async createBooking(bookingData: {
     caregiverId: string;
     serviceType: string;
@@ -396,54 +462,10 @@ class ApiService {
     needs?: string;
     hourlyRate: number;
     totalAmount?: number;
+    paymentIntentId: string;
   }): Promise<any> {
-    const fallbackPayload = {
-      caregiverId: bookingData.caregiverId,
-      serviceType: bookingData.serviceType,
-      requestedDate: bookingData.date,
-      startTime: bookingData.startTime,
-      endTime: bookingData.endTime,
-      duration: bookingData.duration,
-      location: bookingData.location,
-      specialNeeds: bookingData.needs || '',
-      hourlyRate: bookingData.hourlyRate,
-      totalAmount: bookingData.totalAmount,
-    };
-
-    const attempts: Array<{endpoint: string; status?: number; message?: string}> = [];
-    const endpoints: Array<{url: string; payload: any}> = [
-      {url: '/carereceiver/bookings', payload: bookingData},
-      {url: '/caregiver/bookings', payload: bookingData},
-      {url: '/carereceiver/booking-request', payload: fallbackPayload},
-    ];
-
-    for (const endpoint of endpoints) {
-      try {
-        const response = await this.api.post(endpoint.url, endpoint.payload);
-        return response.data;
-      } catch (error: any) {
-        attempts.push({
-          endpoint: endpoint.url,
-          status: error?.response?.status,
-          message: error?.response?.data?.message || error?.message,
-        });
-      }
-    }
-
-    const lastAttempt = attempts[attempts.length - 1];
-    const error = new Error(
-      `Booking API failed. Attempts: ${attempts
-        .map(item => `${item.endpoint} (${item.status || 'no-status'})`)
-        .join(', ')}`,
-    ) as any;
-    error.response = {
-      status: lastAttempt?.status,
-      data: {
-        message: lastAttempt?.message || 'Failed to submit booking request',
-        attempts,
-      },
-    };
-    throw error;
+    const response = await this.api.post('/carereceiver/bookings', bookingData);
+    return response.data;
   }
 
   // Get all bookings for care receiver
@@ -451,6 +473,11 @@ class ApiService {
     const url = status ? `/carereceiver/my-bookings?status=${status}` : '/carereceiver/my-bookings';
     const response = await this.api.get(url);
     return response.data.data;
+  }
+
+  async markRemainingBookingPaymentByCaregiver(bookingId: string): Promise<any> {
+    const response = await this.api.post(`/caregiver/bookings/${bookingId}/remaining-payment`);
+    return response.data;
   }
 
   // Care Documentation endpoints
@@ -559,14 +586,22 @@ class ApiService {
   }
 
   async processRegistrationFeePayment(paymentData: {
-    paymentMethod: string;
-    transactionReference?: string;
+    paymentIntentId: string;
   }): Promise<any> {
     const response = await this.api.post(
       '/caregiver/payment/registration-fee',
       paymentData,
     );
     return response.data;
+  }
+
+  async createRegistrationFeePaymentIntent(): Promise<{
+    paymentIntentId: string;
+    clientSecret: string;
+    amount: number;
+  }> {
+    const response = await this.api.post('/caregiver/payment/registration-fee/payment-intent');
+    return response.data.data;
   }
 
   async getCommissionStatus(): Promise<any> {

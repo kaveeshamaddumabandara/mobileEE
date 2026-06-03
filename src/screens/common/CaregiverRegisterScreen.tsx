@@ -50,14 +50,40 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
     specializations: [] as string[],
     certifications: '',
     education: '',
-    availability: '',
     hourlyRate: '',
     bio: '',
     languages: [] as string[],
-    hasTransportation: '',
-    travelRadius: '',
     proofDocuments: [] as any[],
   });
+
+  const formatSriLankanPhone = (value: string) => {
+    let digits = value.replace(/\D/g, '');
+
+    if (digits.startsWith('94')) {
+      digits = `0${digits.slice(2)}`;
+    }
+
+    if (!digits.startsWith('0') && digits.length > 0) {
+      digits = `0${digits}`;
+    }
+
+    digits = digits.slice(0, 10);
+
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
+    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+  };
+
+  const normalizeSriLankanPhone = (value: string) => {
+    let digits = value.replace(/\D/g, '');
+    if (digits.startsWith('94')) {
+      digits = `0${digits.slice(2)}`;
+    }
+    if (!digits.startsWith('0') && digits.length > 0) {
+      digits = `0${digits}`;
+    }
+    return digits.slice(0, 10);
+  };
 
   const calculatePasswordStrength = (pwd: string) => {
     let strength = 0;
@@ -87,6 +113,14 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
   };
 
   const handleChange = (name: string, value: string) => {
+    if (name === 'phone') {
+      setFormData({
+        ...formData,
+        phone: formatSriLankanPhone(value),
+      });
+      return;
+    }
+
     setFormData({
       ...formData,
       [name]: value,
@@ -240,7 +274,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
       Alert.alert('Error', 'Please select at least one language');
       return;
     }
-    if (!formData.yearsOfExperience || !formData.hourlyRate || !formData.availability) {
+    if (!formData.yearsOfExperience || !formData.hourlyRate) {
       Alert.alert('Error', 'Please complete your professional information');
       return;
     }
@@ -248,8 +282,13 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
       Alert.alert('Error', 'Please complete your qualifications and bio');
       return;
     }
-    if (!formData.hasTransportation || !formData.travelRadius) {
-      Alert.alert('Error', 'Please complete all required fields');
+    if (formData.proofDocuments.length === 0) {
+      Alert.alert('Error', 'Please upload at least one proof document');
+      return;
+    }
+    const normalizedPhone = normalizeSriLankanPhone(formData.phone);
+    if (!/^07\d{8}$/.test(normalizedPhone)) {
+      Alert.alert('Error', 'Please enter a valid Sri Lankan mobile number (07X XXX XXXX)');
       return;
     }
 
@@ -262,7 +301,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         name: `${formData.firstName} ${formData.lastName}`,
         email: formData.email,
         password: formData.password,
-        phone: formData.phone,
+        phone: normalizedPhone,
         dateOfBirth: formData.dateOfBirth,
         address: formData.address,
         city: formData.city,
@@ -272,12 +311,9 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         specializations: formData.specializations,
         certifications: formData.certifications,
         education: formData.education,
-        availability: formData.availability,
         hourlyRate: parseFloat(formData.hourlyRate),
         bio: formData.bio,
         languages: formData.languages,
-        hasTransportation: formData.hasTransportation === 'yes',
-        travelRadius: formData.travelRadius,
       };
 
       // Call the registration API
@@ -287,7 +323,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
       
       Alert.alert(
         'Success',
-        'Your caregiver account has been created successfully!',
+        'Your caregiver account has been created successfully! Please pay the LKR 1,000 registration fee from the Payments section to activate your caregiver account.',
         [
           {
             text: 'OK',
@@ -414,6 +450,12 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
           </View>
           <Text style={styles.title}>Join as a Caregiver</Text>
           <Text style={styles.subtitle}>Create your professional profile</Text>
+          <View style={styles.registrationFeeBanner}>
+            <Icon name="credit-card" size={16} color="#92400e" />
+            <Text style={styles.registrationFeeBannerText}>
+              Registration fee: LKR 1,000 (required after signup)
+            </Text>
+          </View>
         </View>
 
         {/* Registration Form */}
@@ -459,8 +501,9 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
               style={styles.input}
               value={formData.phone}
               onChangeText={value => handleChange('phone', value)}
-              placeholder="(555) 123-4567"
+              placeholder="071 234 5678"
               keyboardType="phone-pad"
+              maxLength={12}
             />
           </View>
 
@@ -638,33 +681,6 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
               keyboardType="decimal-pad"
             />
 
-            <Text style={styles.label}>Availability *</Text>
-            <View style={styles.pickerContainer}>
-              {['Full-time', 'Part-time', 'Weekends only', 'Flexible'].map(
-                option => (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.pickerOption,
-                      formData.availability === option.toLowerCase() &&
-                        styles.pickerOptionSelected,
-                    ]}
-                    onPress={() =>
-                      handleChange('availability', option.toLowerCase())
-                    }>
-                    <Text
-                      style={[
-                        styles.pickerOptionText,
-                        formData.availability === option.toLowerCase() &&
-                          styles.pickerOptionTextSelected,
-                      ]}>
-                      {option}
-                    </Text>
-                  </TouchableOpacity>
-                ),
-              )}
-            </View>
-
             <Text style={styles.label}>Languages Spoken *</Text>
             <View style={styles.checkboxGrid}>
               {languageOptions.map(lang => (
@@ -691,56 +707,6 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
               ))}
             </View>
 
-            <Text style={styles.label}>Reliable Transportation? *</Text>
-            <View style={styles.pickerContainer}>
-              {[
-                {label: 'Yes, I have my own vehicle', value: 'yes'},
-                {label: 'No, I use public transport', value: 'no'},
-              ].map(option => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.pickerOption,
-                    formData.hasTransportation === option.value &&
-                      styles.pickerOptionSelected,
-                  ]}
-                  onPress={() =>
-                    handleChange('hasTransportation', option.value)
-                  }>
-                  <Text
-                    style={[
-                      styles.pickerOptionText,
-                      formData.hasTransportation === option.value &&
-                        styles.pickerOptionTextSelected,
-                    ]}>
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.label}>Willing to Travel (miles) *</Text>
-            <View style={styles.pickerContainer}>
-              {['5', '10', '15', '20', '25+'].map(option => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.pickerOption,
-                    formData.travelRadius === option &&
-                      styles.pickerOptionSelected,
-                  ]}
-                  onPress={() => handleChange('travelRadius', option)}>
-                  <Text
-                    style={[
-                      styles.pickerOptionText,
-                      formData.travelRadius === option &&
-                        styles.pickerOptionTextSelected,
-                    ]}>
-                    Within {option} miles
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
           </View>
 
           {/* Qualifications Section */}
@@ -944,6 +910,23 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: '#6b7280',
     lineHeight: 24,
+  },
+  registrationFeeBanner: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fffbeb',
+    borderColor: '#fcd34d',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  registrationFeeBannerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#92400e',
   },
   formContainer: {
     paddingHorizontal: 24,

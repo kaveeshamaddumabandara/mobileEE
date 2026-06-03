@@ -34,6 +34,10 @@ interface Booking {
   phoneNumber: string;
   email: string;
   hourlyRate: number;
+  advanceAmount?: number;
+  remainingAmount?: number;
+  advancePaymentStatus?: 'pending' | 'completed' | 'failed';
+  remainingPaymentStatus?: 'pending_physical' | 'completed_physical';
   createdAt: string;
   careReceiverId?: {
     _id: string;
@@ -47,7 +51,8 @@ interface Booking {
     address?: any;
     emergencyContact?: {
       name: string;
-      relation: string;
+      relation?: string;
+      relationship?: string;
       phone: string;
     };
     medicalHistory?: any[];
@@ -172,16 +177,23 @@ const CaregiverBookingsScreen: React.FC = () => {
           phoneNumber: careReceiver.phoneNumber || careReceiver.phone || '',
           email: careReceiver.email || '',
           hourlyRate: booking.hourlyRate,
+          advanceAmount: booking.advanceAmount,
+          remainingAmount: booking.remainingAmount,
+          advancePaymentStatus: booking.advancePaymentStatus,
+          remainingPaymentStatus: booking.remainingPaymentStatus,
           createdAt: booking.createdAt,
           careReceiverId: booking.careReceiverId,
           careReceiverDetails: {
             age: careReceiver.age || 0,
             gender: careReceiver.gender || 'Not specified',
             address: addressString,
-            emergencyContact: careReceiver.emergencyContact || {
-              name: '',
-              relation: '',
-              phone: '',
+            emergencyContact: {
+              name: careReceiver.emergencyContact?.name || '',
+              relation:
+                careReceiver.emergencyContact?.relation ||
+                careReceiver.emergencyContact?.relationship ||
+                '',
+              phone: careReceiver.emergencyContact?.phone || '',
             },
             medicalHistory: medicalHistoryArray,
             biography: careReceiver.biography || '',
@@ -273,6 +285,78 @@ const CaregiverBookingsScreen: React.FC = () => {
           },
         },
       ]
+    );
+  };
+
+  const handleMarkBookingCompleted = async (booking: Booking) => {
+    if (booking.status !== 'confirmed') {
+      Alert.alert(
+        'Cannot Complete Yet',
+        'Only confirmed bookings can be marked as completed. Please confirm the booking first.',
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Mark Booking as Completed',
+      `Are you sure you want to mark this booking with ${booking.careReceiverName} as completed?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              setLoadingBookings(true);
+              await ApiService.completeBooking(booking._id);
+              Alert.alert(
+                'Completed',
+                'Booking marked as completed. The care receiver has been notified and can now submit a review.',
+              );
+              await loadBookings();
+            } catch (error: any) {
+              console.error('Error marking booking completed:', error);
+              Alert.alert(
+                'Error',
+                error?.response?.data?.message || 'Failed to mark booking as completed.',
+              );
+              setLoadingBookings(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleApproveBooking = async (booking: Booking) => {
+    if (booking.status !== 'pending') {
+      Alert.alert('Not Required', 'Only pending bookings can be approved.');
+      return;
+    }
+
+    Alert.alert(
+      'Approve Booking',
+      `Approve this booking for ${booking.careReceiverName}?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Approve',
+          onPress: async () => {
+            try {
+              setLoadingBookings(true);
+              await ApiService.approveBooking(booking._id);
+              Alert.alert('Approved', 'Booking approved successfully.');
+              await loadBookings();
+            } catch (error: any) {
+              console.error('Error approving booking:', error);
+              Alert.alert(
+                'Error',
+                error?.response?.data?.message || 'Failed to approve booking.',
+              );
+              setLoadingBookings(false);
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -381,8 +465,28 @@ const CaregiverBookingsScreen: React.FC = () => {
             <Text style={styles.timeText}>
               {booking.startTime} - {booking.endTime}
             </Text>
-            <View style={[styles.statusBadge, styles.confirmedBadge]}>
-              <Text style={[styles.statusText, styles.confirmedText]}>
+            <View
+              style={[
+                styles.statusBadge,
+                booking.status === 'confirmed'
+                  ? styles.confirmedBadge
+                  : booking.status === 'pending'
+                  ? styles.pendingStatusBadge
+                  : booking.status === 'completed'
+                  ? styles.completedStatusBadge
+                  : styles.cancelledStatusBadge,
+              ]}>
+              <Text
+                style={[
+                  styles.statusText,
+                  booking.status === 'confirmed'
+                    ? styles.confirmedText
+                    : booking.status === 'pending'
+                    ? styles.pendingStatusText
+                    : booking.status === 'completed'
+                    ? styles.completedStatusText
+                    : styles.cancelledStatusText,
+                ]}>
                 {booking.status}
               </Text>
             </View>
@@ -393,6 +497,36 @@ const CaregiverBookingsScreen: React.FC = () => {
       <View style={styles.locationRow}>
         <Icon name="map-pin" size={14} color="#6b7280" />
         <Text style={styles.locationText}>{booking.location}</Text>
+      </View>
+
+      <View style={styles.paymentSplitRow}>
+        <Text style={styles.paymentSplitText}>
+          Online 50%: Rs.{Number(booking.advanceAmount || 0).toLocaleString()} ({booking.advancePaymentStatus || 'pending'})
+        </Text>
+        <View style={styles.physicalPaymentStatusRow}>
+          <Text style={styles.paymentSplitText}>
+            Physical 50%: Rs.{Number(booking.remainingAmount || 0).toLocaleString()}
+          </Text>
+          <View
+            style={[
+              styles.physicalPaymentTag,
+              booking.remainingPaymentStatus === 'completed_physical'
+                ? styles.physicalPaymentDoneTag
+                : styles.physicalPaymentPendingTag,
+            ]}>
+            <Text
+              style={[
+                styles.physicalPaymentTagText,
+                booking.remainingPaymentStatus === 'completed_physical'
+                  ? styles.physicalPaymentDoneTagText
+                  : styles.physicalPaymentPendingTagText,
+              ]}>
+              {booking.remainingPaymentStatus === 'completed_physical'
+                ? 'Physical Payment Done'
+                : 'Physical Payment Pending'}
+            </Text>
+          </View>
+        </View>
       </View>
 
       {booking.needs && (
@@ -427,6 +561,54 @@ const CaregiverBookingsScreen: React.FC = () => {
           <Icon name="user" size={16} color="#8b5cf6" />
           <Text style={styles.actionButtonText}>Details</Text>
         </TouchableOpacity>
+        {booking.status === 'pending' && (
+          <TouchableOpacity
+            style={styles.approveBookingButton}
+            onPress={() => handleApproveBooking(booking)}>
+            <Icon name="check" size={16} color="#ffffff" />
+            <Text style={styles.approveBookingButtonText}>Approve</Text>
+          </TouchableOpacity>
+        )}
+        {booking.status === 'confirmed' && (
+          <TouchableOpacity
+            style={styles.completeBookingButton}
+            onPress={() => handleMarkBookingCompleted(booking)}>
+            <Icon name="check-square" size={16} color="#ffffff" />
+            <Text style={styles.completeBookingButtonText}>Mark Completed</Text>
+          </TouchableOpacity>
+        )}
+        {booking.remainingPaymentStatus !== 'completed_physical' && (
+          <TouchableOpacity
+            style={styles.markPhysicalPaidButton}
+            onPress={() =>
+              Alert.alert(
+                'Confirm Physical Payment',
+                'Mark remaining physical payment as completed for this booking?',
+                [
+                  {text: 'Cancel', style: 'cancel'},
+                  {
+                    text: 'Confirm',
+                    onPress: async () => {
+                      try {
+                        await ApiService.markRemainingBookingPaymentByCaregiver(booking._id);
+                        Alert.alert('Updated', 'Physical payment marked as completed.');
+                        await loadBookings();
+                      } catch (error: any) {
+                        console.error('Error marking physical payment:', error);
+                        Alert.alert(
+                          'Error',
+                          error?.response?.data?.message || 'Failed to mark physical payment.',
+                        );
+                      }
+                    },
+                  },
+                ],
+              )
+            }>
+            <Icon name="check-circle" size={16} color="#ffffff" />
+            <Text style={styles.markPhysicalPaidButtonText}>Mark Physical Paid</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -737,6 +919,43 @@ const CaregiverBookingsScreen: React.FC = () => {
                     </View>
                   </View>
 
+                  {/* Payment Status */}
+                  <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="dollar-sign" size={18} color="#0f766e" />
+                      <Text style={styles.sectionTitle}>Payment Status</Text>
+                    </View>
+                    <View style={styles.paymentSplitRow}>
+                      <Text style={styles.paymentSplitText}>
+                        Online 50%: Rs.{Number(selectedBooking.advanceAmount || 0).toLocaleString()} ({selectedBooking.advancePaymentStatus || 'pending'})
+                      </Text>
+                      <View style={styles.physicalPaymentStatusRow}>
+                        <Text style={styles.paymentSplitText}>
+                          Physical 50%: Rs.{Number(selectedBooking.remainingAmount || 0).toLocaleString()}
+                        </Text>
+                        <View
+                          style={[
+                            styles.physicalPaymentTag,
+                            selectedBooking.remainingPaymentStatus === 'completed_physical'
+                              ? styles.physicalPaymentDoneTag
+                              : styles.physicalPaymentPendingTag,
+                          ]}>
+                          <Text
+                            style={[
+                              styles.physicalPaymentTagText,
+                              selectedBooking.remainingPaymentStatus === 'completed_physical'
+                                ? styles.physicalPaymentDoneTagText
+                                : styles.physicalPaymentPendingTagText,
+                            ]}>
+                            {selectedBooking.remainingPaymentStatus === 'completed_physical'
+                              ? 'Physical Payment Done'
+                              : 'Physical Payment Pending'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
                   {/* Emergency Contact */}
                   <View style={styles.section}>
                     <View style={styles.sectionHeader}>
@@ -745,17 +964,22 @@ const CaregiverBookingsScreen: React.FC = () => {
                     </View>
                     <View style={styles.emergencyBox}>
                       <Text style={styles.emergencyName}>
-                        {selectedBooking.careReceiverDetails.emergencyContact.name}
+                        {selectedBooking.careReceiverDetails.emergencyContact.name || 'Not provided'}
                       </Text>
                       <Text style={styles.emergencyRelation}>
-                        {selectedBooking.careReceiverDetails.emergencyContact.relation}
+                        {selectedBooking.careReceiverDetails.emergencyContact.relation || 'Not provided'}
                       </Text>
                       <TouchableOpacity
-                        style={styles.emergencyCallButton}
+                        style={[
+                          styles.emergencyCallButton,
+                          !selectedBooking.careReceiverDetails.emergencyContact.phone &&
+                            styles.disabledActionButton,
+                        ]}
+                        disabled={!selectedBooking.careReceiverDetails.emergencyContact.phone}
                         onPress={() => handleCall(selectedBooking.careReceiverDetails.emergencyContact.phone)}>
                         <Icon name="phone" size={16} color="#ef4444" />
                         <Text style={styles.emergencyPhone}>
-                          {selectedBooking.careReceiverDetails.emergencyContact.phone}
+                          {selectedBooking.careReceiverDetails.emergencyContact.phone || 'Not provided'}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -799,7 +1023,11 @@ const CaregiverBookingsScreen: React.FC = () => {
               </TouchableOpacity>
               {selectedBooking && (
                 <TouchableOpacity
-                  style={styles.modalCallButton}
+                  style={[
+                    styles.modalCallButton,
+                    !selectedBooking.phoneNumber && styles.disabledActionButton,
+                  ]}
+                  disabled={!selectedBooking.phoneNumber}
                   onPress={() => {
                     setSelectedBooking(null);
                     handleCall(selectedBooking.phoneNumber);
@@ -857,10 +1085,14 @@ const CaregiverBookingsScreen: React.FC = () => {
 
                 <View style={styles.contactActionBox}>
                   <Text style={styles.contactLabel}>Phone Number</Text>
-                  <Text style={styles.contactValue}>{selectedContactBooking.phoneNumber}</Text>
+                  <Text style={styles.contactValue}>{selectedContactBooking.phoneNumber || 'Not provided'}</Text>
                   
                   <TouchableOpacity
-                    style={styles.primaryActionButton}
+                    style={[
+                      styles.primaryActionButton,
+                      !selectedContactBooking.phoneNumber && styles.disabledActionButton,
+                    ]}
+                    disabled={!selectedContactBooking.phoneNumber}
                     onPress={() => {
                       setCallModalVisible(false);
                       handleCall(selectedContactBooking.phoneNumber);
@@ -871,20 +1103,25 @@ const CaregiverBookingsScreen: React.FC = () => {
 
                   <Text style={styles.emergencyLabel}>Emergency Contact</Text>
                   <Text style={styles.emergencyContactName}>
-                    {selectedContactBooking.careReceiverDetails.emergencyContact.name}
+                    {selectedContactBooking.careReceiverDetails.emergencyContact.name || 'Not provided'}
                   </Text>
                   <Text style={styles.emergencyContactRelation}>
-                    {selectedContactBooking.careReceiverDetails.emergencyContact.relation}
+                    {selectedContactBooking.careReceiverDetails.emergencyContact.relation || 'Not provided'}
                   </Text>
                   <TouchableOpacity
-                    style={styles.secondaryActionButton}
+                    style={[
+                      styles.secondaryActionButton,
+                      !selectedContactBooking.careReceiverDetails.emergencyContact.phone &&
+                        styles.disabledActionButton,
+                    ]}
+                    disabled={!selectedContactBooking.careReceiverDetails.emergencyContact.phone}
                     onPress={() => {
                       setCallModalVisible(false);
                       handleCall(selectedContactBooking.careReceiverDetails.emergencyContact.phone);
                     }}>
                     <Icon name="phone" size={18} color="#ef4444" />
                     <Text style={styles.secondaryActionText}>
-                      {selectedContactBooking.careReceiverDetails.emergencyContact.phone}
+                      {selectedContactBooking.careReceiverDetails.emergencyContact.phone || 'Not provided'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1365,6 +1602,24 @@ const styles = StyleSheet.create({
   confirmedText: {
     color: '#10b981',
   },
+  pendingStatusBadge: {
+    backgroundColor: '#fef3c7',
+  },
+  pendingStatusText: {
+    color: '#92400e',
+  },
+  completedStatusBadge: {
+    backgroundColor: '#dbeafe',
+  },
+  completedStatusText: {
+    color: '#1e40af',
+  },
+  cancelledStatusBadge: {
+    backgroundColor: '#fee2e2',
+  },
+  cancelledStatusText: {
+    color: '#991b1b',
+  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1412,6 +1667,94 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#8b5cf6',
+  },
+  paymentSplitRow: {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    gap: 4,
+  },
+  paymentSplitText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  physicalPaymentStatusRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  physicalPaymentTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  physicalPaymentDoneTag: {
+    backgroundColor: '#dcfce7',
+  },
+  physicalPaymentPendingTag: {
+    backgroundColor: '#fef3c7',
+  },
+  physicalPaymentTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  physicalPaymentDoneTagText: {
+    color: '#166534',
+  },
+  physicalPaymentPendingTagText: {
+    color: '#92400e',
+  },
+  markPhysicalPaidButton: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#0f766e',
+  },
+  markPhysicalPaidButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  completeBookingButton: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#2563eb',
+  },
+  completeBookingButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  approveBookingButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#16a34a',
+  },
+  approveBookingButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   emptyState: {
     alignItems: 'center',
@@ -1828,6 +2171,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#ef4444',
+  },
+  disabledActionButton: {
+    opacity: 0.6,
   },
   emergencyLabel: {
     fontSize: 12,
