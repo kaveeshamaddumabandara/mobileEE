@@ -126,10 +126,25 @@ const CaregiverBookingsScreen: React.FC = () => {
   const [messageModalVisible, setMessageModalVisible] = useState(false);
   const [selectedContactBooking, setSelectedContactBooking] = useState<Booking | null>(null);
 
+  // Flat fee gate
+  const [flatFeeDue, setFlatFeeDue] = useState(false);
+  const [flatFeeAmount, setFlatFeeAmount] = useState(0);
+
   useEffect(() => {
     loadPendingRequests();
     loadBookings();
+    loadFlatFeeStatus();
   }, []);
+
+  const loadFlatFeeStatus = async () => {
+    try {
+      const status = await ApiService.getCommissionStatus();
+      setFlatFeeDue(Boolean(status.requiresPayment));
+      setFlatFeeAmount(status.commissionDue || 0);
+    } catch {
+      // Non-critical — silently ignore
+    }
+  };
 
   const loadBookings = async () => {
     setLoadingBookings(true);
@@ -734,6 +749,24 @@ const CaregiverBookingsScreen: React.FC = () => {
             </View>
           </View>
         </View>
+
+        {/* Flat Fee Due Banner */}
+        {flatFeeDue && (
+          <View style={styles.flatFeeBanner}>
+            <View style={styles.flatFeeBannerRow}>
+              <Icon name="alert-triangle" size={20} color="#92400e" />
+              <Text style={styles.flatFeeBannerTitle}>Bookings Paused</Text>
+            </View>
+            <Text style={styles.flatFeeBannerBody}>
+              You have completed 20 bookings. A flat fee of{' '}
+              <Text style={styles.flatFeeBannerAmount}>
+                LKR {flatFeeAmount.toLocaleString()}
+              </Text>{' '}
+              is due. Pay it from the{' '}
+              <Text style={styles.flatFeeBannerLink}>Payments</Text> section to resume accepting bookings.
+            </Text>
+          </View>
+        )}
 
         {/* Pending Requests */}
         {loadingRequests ? (
@@ -1448,6 +1481,40 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9fafb',
+  },
+  flatFeeBanner: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 10,
+    padding: 14,
+  },
+  flatFeeBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  flatFeeBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  flatFeeBannerBody: {
+    fontSize: 13,
+    color: '#78350f',
+    lineHeight: 19,
+  },
+  flatFeeBannerAmount: {
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  flatFeeBannerLink: {
+    fontWeight: '700',
+    color: '#7c3aed',
+    textDecorationLine: 'underline',
   },
   mainScrollView: {
     flex: 1,

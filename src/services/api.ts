@@ -198,6 +198,23 @@ class ApiService {
     return response.data;
   }
 
+  async uploadCaregiverDocuments(
+    files: Array<{uri: string; name: string; type: string}>,
+  ): Promise<{status: string; message: string}> {
+    const formData = new FormData();
+    files.forEach((file, index) => {
+      formData.append('qualificationDocs', {
+        uri: file.uri,
+        name: file.name || `document_${index}.jpg`,
+        type: file.type || 'image/jpeg',
+      } as any);
+    });
+    const response = await this.api.post('/caregiver/documents', formData, {
+      headers: {'Content-Type': 'multipart/form-data'},
+    });
+    return response.data;
+  }
+
   // Caregiver endpoints
   async getCaregivers(): Promise<Caregiver[]> {
     const user = await AsyncStorage.getItem('user');
@@ -609,9 +626,18 @@ class ApiService {
     return response.data.data;
   }
 
+  async createFlatFeePaymentIntent(): Promise<{
+    paymentIntentId: string;
+    clientSecret: string;
+    amount: number;
+    cyclesDue: number;
+  }> {
+    const response = await this.api.post('/caregiver/payment/flat-fee/payment-intent');
+    return response.data.data;
+  }
+
   async processCommissionPayment(paymentData: {
-    paymentMethod: string;
-    transactionReference?: string;
+    paymentIntentId: string;
   }): Promise<any> {
     const response = await this.api.post('/caregiver/payment/commission', paymentData);
     return response.data;

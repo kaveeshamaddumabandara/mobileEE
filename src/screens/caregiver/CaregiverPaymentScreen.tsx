@@ -9,7 +9,6 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
-  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation} from '@react-navigation/native';
@@ -46,11 +45,6 @@ const CaregiverPaymentScreen: React.FC = () => {
   const [commissionDue, setCommissionDue] = useState(0);
   const [requiresCommissionPayment, setRequiresCommissionPayment] = useState(false);
 
-  // Payment modal state
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [paymentType, setPaymentType] = useState<'registration' | 'commission'>('commission');
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('Credit Card');
-  
   // Payment history
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
 
@@ -94,66 +88,53 @@ const CaregiverPaymentScreen: React.FC = () => {
   const handleMakePayment = (type: 'registration' | 'commission') => {
     if (type === 'registration') {
       processRegistrationPaymentWithStripe();
-      return;
+    } else {
+      processFlatFeePaymentWithStripe();
     }
-
-    setPaymentType(type);
-    setPaymentModalVisible(true);
   };
 
-  const processPayment = async () => {
-    if (paymentType === 'registration') {
-      setPaymentModalVisible(false);
-      await processRegistrationPaymentWithStripe();
-      return;
-    }
-
+  const processFlatFeePaymentWithStripe = async () => {
     try {
       setProcessing(true);
 
-      await api.processCommissionPayment({
-        paymentMethod: selectedPaymentMethod,
+      const paymentIntent = await api.createFlatFeePaymentIntent();
+      const initResult = await initPaymentSheet({
+        merchantDisplayName: 'CareConnect',
+        paymentIntentClientSecret: paymentIntent.clientSecret,
+        allowsDelayedPaymentMethods: false,
       });
 
-      setPaymentModalVisible(false);
-      Alert.alert('Success!', 'Commission paid successfully.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            fetchPaymentData();
-          },
-        },
+      if (initResult.error) {
+        throw new Error(initResult.error.message);
+      }
+
+      const paymentResult = await presentPaymentSheet();
+      if (paymentResult.error) {
+        if (paymentResult.error.code === 'Canceled') {
+          Alert.alert('Payment Cancelled', 'Flat fee payment was cancelled.');
+          return;
+        }
+        throw new Error(paymentResult.error.message);
+      }
+
+      await api.processCommissionPayment({
+        paymentIntentId: paymentIntent.paymentIntentId,
+      });
+
+      Alert.alert('Success!', 'Flat fee paid successfully.', [
+        {text: 'OK', onPress: () => fetchPaymentData()},
       ]);
     } catch (error: any) {
-      console.error('Error processing commission payment:', error);
+      console.error('Error processing flat fee payment:', error);
       Alert.alert(
         'Error',
         error?.response?.data?.message ||
           error?.message ||
-          'Failed to process commission payment',
+          'Failed to process flat fee payment',
       );
     } finally {
       setProcessing(false);
     }
-  };
-
-  const renderPaymentMethod = (method: string) => {
-    const isSelected = selectedPaymentMethod === method;
-
-    return (
-      <TouchableOpacity
-        key={method}
-        style={[
-          styles.paymentMethodOption,
-          isSelected && styles.paymentMethodSelected,
-        ]}
-        onPress={() => setSelectedPaymentMethod(method)}>
-        <View style={[styles.radio, isSelected && styles.radioSelected]}>
-          {isSelected && <View style={styles.radioInner} />}
-        </View>
-        <Text style={styles.paymentMethodText}>{method}</Text>
-      </TouchableOpacity>
-    );
   };
 
   const processRegistrationPaymentWithStripe = async () => {
@@ -452,11 +433,11 @@ const CaregiverPaymentScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Commission Status Section */}
+        {/* Booking Flat Fee Section */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Icon name="trending-up" size={24} color="#8b5cf6" />
-            <Text style={styles.cardTitle}>Booking Commission</Text>
+            <Text style={styles.cardTitle}>Booking Flat Fee</Text>
           </View>
           
           <View style={styles.statsGrid}>
@@ -502,14 +483,21 @@ const CaregiverPaymentScreen: React.FC = () => {
                   LKR {commissionDue.toLocaleString()}
                 </Text>
                 <Text style={styles.commissionDueNote}>
-                  LKR {commissionRate} per 20 bookings
+                  LKR 1,000 flat fee per 20 bookings
                 </Text>
               </View>
               <TouchableOpacity
-                style={styles.payCommissionButton}
-                onPress={() => handleMakePayment('commission')}>
-                <Icon name="dollar-sign" size={18} color="#fff" />
-                <Text style={styles.payCommissionButtonText}>Pay Commission</Text>
+                style={[styles.payCommissionButton, processing && styles.buttonDisabled]}
+                onPress={() => handleMakePayment('commission')}
+                disabled={processing}>
+                {processing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="dollar-sign" size={18} color="#fff" />
+                )}
+                <Text style={styles.payCommissionButtonText}>
+                  {processing ? 'Processing...' : 'Pay LKR 1,000 Flat Fee'}
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -641,73 +629,6 @@ const CaregiverPaymentScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* Payment Modal */}
-      <Modal
-        visible={paymentModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setPaymentModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {paymentType === 'registration' ? 'Pay Registration Fee' : 'Pay Commission'}
-              </Text>
-              <TouchableOpacity onPress={() => setPaymentModalVisible(false)}>
-                <Icon name="x" size={24} color="#374151" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.paymentSummary}>
-                <Text style={styles.summaryLabel}>Amount to Pay</Text>
-                <Text style={styles.summaryAmount}>
-                  LKR{' '}
-                  {(paymentType === 'registration'
-                    ? registrationFeeAmount
-                    : commissionDue
-                  ).toLocaleString()}
-                </Text>
-              </View>
-
-              <Text style={styles.inputLabel}>Payment Method</Text>
-              <View style={styles.paymentMethods}>
-                {renderPaymentMethod('Credit Card')}
-                {renderPaymentMethod('Debit Card')}
-                {renderPaymentMethod('Bank Transfer')}
-              </View>
-
-              <View style={styles.paymentNote}>
-                <Icon name="info" size={16} color="#6b7280" />
-                <Text style={styles.paymentNoteText}>
-                  This is a simulated payment. In production, this would integrate with a payment gateway.
-                </Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setPaymentModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalConfirmButton, processing && styles.buttonDisabled]}
-                onPress={processPayment}
-                disabled={processing}>
-                {processing ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Icon name="check" size={18} color="#fff" />
-                )}
-                <Text style={styles.modalConfirmText}>
-                  {processing ? 'Processing...' : 'Confirm Payment'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -1074,56 +995,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  modalBody: {
-    padding: 20,
-  },
-  paymentSummary: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  summaryAmount: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
   dataViewToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1206,93 +1077,6 @@ const styles = StyleSheet.create({
   },
   dataWarning: {
     color: '#f59e0b',
-  },
-  paymentMethods: {
-    marginBottom: 20,
-  },
-  paymentMethodOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginBottom: 8,
-  },
-  paymentMethodSelected: {
-    borderColor: '#8b5cf6',
-    backgroundColor: '#f5f3ff',
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioSelected: {
-    borderColor: '#8b5cf6',
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#8b5cf6',
-  },
-  paymentMethodText: {
-    fontSize: 15,
-    color: '#374151',
-  },
-  paymentNote: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#eff6ff',
-    borderRadius: 8,
-    padding: 12,
-  },
-  paymentNoteText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#1e40af',
-    lineHeight: 18,
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  modalConfirmButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#8b5cf6',
-  },
-  modalConfirmText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
   },
   buttonDisabled: {
     opacity: 0.6,
