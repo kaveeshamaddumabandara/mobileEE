@@ -15,6 +15,8 @@ import {
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {AuthStackParamList} from '../../navigation/types';
 import Icon from 'react-native-vector-icons/Feather';
+import {launchImageLibrary} from 'react-native-image-picker';
+import DocumentPicker, {types as DocTypes} from 'react-native-document-picker';
 import ApiService from '../../services/api';
 import {useAuth} from '../../context/AuthContext';
 
@@ -28,7 +30,7 @@ type CaregiverRegisterScreenProps = {
 const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
   navigation,
 }) => {
-  const {logout} = useAuth();
+  const {logout, register} = useAuth();
   const [loading, setLoading] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -53,7 +55,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
     hourlyRate: '',
     bio: '',
     languages: [] as string[],
-    proofDocuments: [] as any[],
+    proofDocuments: [] as Array<{uri: string; name: string; type: string}>,
   });
 
   const formatSriLankanPhone = (value: string) => {
@@ -182,33 +184,65 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
     }
   };
 
+  const pickImages = () => {
+    launchImageLibrary(
+      {mediaType: 'photo', selectionLimit: 5, quality: 0.8, includeBase64: false},
+      response => {
+        if (response.didCancel || response.errorCode) {
+          return;
+        }
+        const picked = (response.assets ?? [])
+          .filter(asset => !!asset.uri)
+          .map(asset => ({
+            uri: asset.uri!,
+            name: asset.fileName || `image_${Date.now()}.jpg`,
+            type: asset.type || 'image/jpeg',
+          }));
+        if (picked.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            proofDocuments: [...prev.proofDocuments, ...picked],
+          }));
+        }
+      },
+    );
+  };
+
+  const pickPdfs = async () => {
+    try {
+      const results = await DocumentPicker.pick({
+        type: [DocTypes.pdf],
+        allowMultiSelection: true,
+      });
+      const picked = results.map(file => ({
+        uri: file.uri,
+        name: file.name || `document_${Date.now()}.pdf`,
+        type: file.type || 'application/pdf',
+      }));
+      if (picked.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          proofDocuments: [...prev.proofDocuments, ...picked],
+        }));
+      }
+    } catch (err) {
+      if (DocumentPicker.isCancel(err)) {
+        return;
+      }
+      Alert.alert('Error', 'Failed to pick PDF. Please try again.');
+    }
+  };
+
   const handleDocumentPick = () => {
-    // Simulate document picker - In production, use react-native-document-picker
     Alert.alert(
-      'Select Documents',
-      'Choose documents to upload',
+      'Upload Document',
+      'Choose the type of file to upload',
       [
-        {
-          text: 'Add Document',
-          onPress: () => {
-            // Simulate adding a document
-            const newDoc = {
-              name: `Document_${formData.proofDocuments.length + 1}.pdf`,
-              type: 'application/pdf',
-              size: Math.floor(Math.random() * 1000000),
-            };
-            setFormData({
-              ...formData,
-              proofDocuments: [...formData.proofDocuments, newDoc],
-            });
-            Alert.alert('Success', `${newDoc.name} added successfully`);
-          },
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
+        {text: 'Image (JPG / PNG)', onPress: pickImages},
+        {text: 'PDF Document', onPress: pickPdfs},
+        {text: 'Cancel', style: 'cancel'},
+      ],
+      {cancelable: true},
     );
   };
 
@@ -293,9 +327,8 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
     }
 
     setLoading(true);
-    
+
     try {
-      // Prepare data for backend
       const registrationData = {
         role: 'caregiver' as 'caregiver',
         name: `${formData.firstName} ${formData.lastName}`,
@@ -316,33 +349,35 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         languages: formData.languages,
       };
 
-      // Call the registration API
-      await ApiService.register(registrationData);
-      
+      // Register and persist token via AuthContext
+      await register(registrationData);
+
+      // Upload qualification documents using the now-active token
+      try {
+        await ApiService.uploadCaregiverDocuments(formData.proofDocuments);
+      } catch (uploadError: any) {
+        console.error('Document upload error:', uploadError);
+        // Registration succeeded; warn but don't block the user
+        Alert.alert(
+          'Documents Upload Failed',
+          'Your account was created but we could not upload your proof documents. You can re-upload them from your profile settings.',
+        );
+      }
+
       setLoading(false);
-      
+
       Alert.alert(
-        'Success',
-        'Your caregiver account has been created successfully! Please pay the LKR 1,000 registration fee from the Payments section to activate your caregiver account.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Navigate to login or dashboard based on auto-login
-              // Since register returns token and user, the app will auto-navigate
-              // through the RootNavigator
-            },
-          },
-        ]
+        'Registration Successful',
+        'Your caregiver account has been created and your documents have been submitted for review. Please pay the LKR 1,000 registration fee from the Payments section to activate your account.',
+        [{text: 'OK'}],
       );
     } catch (error: any) {
       setLoading(false);
       console.error('Registration error:', error);
-      
-      const errorMessage = error.response?.data?.message || 
-                          error.message || 
-                          'Registration failed. Please try again.';
-      
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        'Registration failed. Please try again.';
       Alert.alert('Registration Failed', errorMessage);
     }
   };
@@ -753,21 +788,37 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
             {/* Document List */}
             {formData.proofDocuments.length > 0 && (
               <View style={styles.documentList}>
-                {formData.proofDocuments.map((doc, index) => (
-                  <View key={index} style={styles.documentItem}>
-                    <View style={styles.documentInfo}>
-                      <Icon name="file-text" size={18} color="#9333ea" />
-                      <Text style={styles.documentName} numberOfLines={1}>
-                        {doc.name}
-                      </Text>
+                {formData.proofDocuments.map((doc, index) => {
+                  const isPdf = doc.type === 'application/pdf';
+                  return (
+                    <View key={index} style={styles.documentItem}>
+                      <View
+                        style={[
+                          styles.documentIconBadge,
+                          isPdf ? styles.documentIconPdf : styles.documentIconImage,
+                        ]}>
+                        <Icon
+                          name={isPdf ? 'file-text' : 'image'}
+                          size={14}
+                          color="#fff"
+                        />
+                      </View>
+                      <View style={styles.documentInfo}>
+                        <Text style={styles.documentName} numberOfLines={1}>
+                          {doc.name}
+                        </Text>
+                        <Text style={styles.documentType}>
+                          {isPdf ? 'PDF' : 'Image'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveDocument(index)}
+                        style={styles.removeButton}>
+                        <Icon name="x" size={18} color="#ef4444" />
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => handleRemoveDocument(index)}
-                      style={styles.removeButton}>
-                      <Icon name="x" size={18} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
           </View>
@@ -1170,17 +1221,34 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
-  documentInfo: {
-    flexDirection: 'row',
+  documentIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  documentIconPdf: {
+    backgroundColor: '#dc2626',
+  },
+  documentIconImage: {
+    backgroundColor: '#9333ea',
+  },
+  documentInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
   documentName: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#374151',
     fontWeight: '500',
     flex: 1,
+  },
+  documentType: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 1,
   },
   removeButton: {
     padding: 4,
