@@ -39,6 +39,7 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
     assignedCaregivers: 0,
     monthlyHours: 0,
     satisfactionRate: 0,
+    totalReviews: 0,
   });
   
   const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
@@ -60,8 +61,13 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
       console.log('Dashboard Data received:', dashboardData);
       
       if (dashboardData) {
-        // Set stats
-        setDashboardStats(dashboardData.stats);
+        setDashboardStats({
+          monthlyAppointments: dashboardData.stats?.monthlyAppointments ?? 0,
+          assignedCaregivers: dashboardData.stats?.assignedCaregivers ?? 0,
+          monthlyHours: dashboardData.stats?.monthlyHours ?? 0,
+          satisfactionRate: dashboardData.stats?.satisfactionRate ?? 0,
+          totalReviews: dashboardData.stats?.totalReviews ?? 0,
+        });
         console.log('Stats set:', dashboardData.stats);
         
         // Set weekly activity
@@ -107,6 +113,7 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
         assignedCaregivers: 0,
         monthlyHours: 0,
         satisfactionRate: 0,
+        totalReviews: 0,
       });
       setUpcomingAppointments([]);
       setWeeklyActivity([]);
@@ -237,7 +244,11 @@ const CareReceiverDashboardScreen: React.FC<CareReceiverDashboardScreenProps> = 
             />
             <StatCard
               label="Satisfaction"
-              value={`${dashboardStats.satisfactionRate}%`}
+              value={
+                dashboardStats.totalReviews > 0
+                  ? `${dashboardStats.satisfactionRate}%`
+                  : 'N/A'
+              }
               icon="heart"
               color="#f59e0b"
             />
