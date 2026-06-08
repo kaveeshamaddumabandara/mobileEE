@@ -31,6 +31,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
   navigation,
 }) => {
   const {logout, register} = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -349,27 +350,31 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         languages: formData.languages,
       };
 
-      // Register and persist token via AuthContext
+      // Register — for caregivers this stores the token temporarily (no user state set)
+      // so RootNavigator stays on the Auth stack during the upload step.
       await register(registrationData);
 
-      // Upload qualification documents using the now-active token
+      // Upload documents while the temporary token is in AsyncStorage
       try {
         await ApiService.uploadCaregiverDocuments(formData.proofDocuments);
       } catch (uploadError: any) {
         console.error('Document upload error:', uploadError);
-        // Registration succeeded; warn but don't block the user
         Alert.alert(
           'Documents Upload Failed',
-          'Your account was created but we could not upload your proof documents. You can re-upload them from your profile settings.',
+          'Your account was created but we could not upload your documents. You can re-upload them after your account is approved.',
         );
       }
+
+      // Clear the temporary auth token — the caregiver must wait for approval
+      // before they can log in and use the app.
+      await logout();
 
       setLoading(false);
 
       Alert.alert(
-        'Registration Successful',
-        'Your caregiver account has been created and your documents have been submitted for review. Please pay the LKR 1,000 registration fee from the Payments section to activate your account.',
-        [{text: 'OK'}],
+        'Application Submitted!',
+        'Your caregiver registration has been submitted for admin review.\n\nYou will receive an email notification once your application is approved. After approval, log in and pay the LKR 1,000 registration fee to activate your account.',
+        [{text: 'OK', onPress: () => navigation.navigate('Login')}],
       );
     } catch (error: any) {
       setLoading(false);

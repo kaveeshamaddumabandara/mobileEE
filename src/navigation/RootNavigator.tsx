@@ -10,6 +10,9 @@ import AuthNavigator from './AuthNavigator';
 import CaregiverNavigator from './CaregiverNavigator';
 import CareReceiverNavigator from './CareReceiverNavigator';
 
+// Import pending screen (standalone, not inside a tab navigator)
+import CaregiverPendingScreen from '../screens/caregiver/CaregiverPendingScreen';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator: React.FC = () => {
@@ -23,6 +26,19 @@ const RootNavigator: React.FC = () => {
     );
   }
 
+  // Determine which root screen to show for a logged-in caregiver:
+  //   1. Not yet verified (admin hasn't approved) → Pending screen
+  //   2. Verified but fee not paid → Full CaregiverApp (Payment tab shows the fee flow)
+  //   3. Verified + fee paid → Full CaregiverApp
+  const getCaregiverScreen = () => {
+    if (!user?.isVerified) {
+      return (
+        <Stack.Screen name="CaregiverPending" component={CaregiverPendingScreen} />
+      );
+    }
+    return <Stack.Screen name="CaregiverApp" component={CaregiverNavigator} />;
+  };
+
   return (
     <NavigationContainer>
       <Stack.Navigator
@@ -33,7 +49,7 @@ const RootNavigator: React.FC = () => {
         {!user ? (
           <Stack.Screen name="Auth" component={AuthNavigator} />
         ) : user.role === 'caregiver' ? (
-          <Stack.Screen name="CaregiverApp" component={CaregiverNavigator} />
+          getCaregiverScreen()
         ) : (
           <Stack.Screen name="CareReceiverApp" component={CareReceiverNavigator} />
         )}

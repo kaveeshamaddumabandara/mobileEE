@@ -5,6 +5,9 @@ export type AuthStackParamList = {
   CaregiverRegister: undefined;
   CareReceiverRegister: undefined;
   ForgotPassword: undefined;
+  CaregiverForgotPassword: undefined;
+  CareReceiverForgotPassword: undefined;
+  ResetPassword: { email?: string };
   ContactUs: undefined;
   AboutUs: undefined;
 };
@@ -38,6 +41,7 @@ export type CareReceiverTabParamList = {
 
 export type RootStackParamList = {
   Auth: undefined;
+  CaregiverPending: undefined;
   CaregiverApp: undefined;
   CareReceiverApp: undefined;
 };

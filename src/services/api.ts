@@ -90,6 +90,10 @@ class ApiService {
     };
   }
 
+  async getMe() {
+    return this.api.get('/auth/me');
+  }
+
   async forgotPassword(email: string): Promise<{message: string}> {
     const response = await this.api.post('/auth/forgotpassword', {email});
     return response.data;

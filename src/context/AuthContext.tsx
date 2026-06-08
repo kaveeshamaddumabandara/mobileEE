@@ -11,6 +11,7 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (user: User) => void;
+  refreshUserStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,16 +23,12 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load user and token from storage on app start
   useEffect(() => {
     loadStoredAuth();
   }, []);
 
   const loadStoredAuth = async () => {
     try {
-      // REMOVED: Forced logout for development
-      // Now users stay logged in between sessions for better UX
-      
       const storedToken = await AsyncStorage.getItem('token');
       const storedUser = await AsyncStorage.getItem('user');
 
@@ -47,26 +44,26 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   const login = async (credentials: LoginCredentials) => {
-    try {
-      const response = await ApiService.login(credentials);
-      await AsyncStorage.setItem('token', response.token);
-      await AsyncStorage.setItem('user', JSON.stringify(response.user));
-      setToken(response.token);
-      setUser(response.user);
-    } catch (error) {
-      throw error;
-    }
+    const response = await ApiService.login(credentials);
+    await AsyncStorage.setItem('token', response.token);
+    await AsyncStorage.setItem('user', JSON.stringify(response.user));
+    setToken(response.token);
+    setUser(response.user);
   };
 
   const register = async (data: RegisterData) => {
-    try {
-      const response = await ApiService.register(data);
+    const response = await ApiService.register(data);
+
+    if (data.role === 'caregiver') {
+      // Store token temporarily so the document upload (which requires auth) can run.
+      // Do NOT set user state — this keeps RootNavigator on the Auth stack,
+      // letting the registration screen navigate to Login after upload completes.
+      await AsyncStorage.setItem('token', response.token);
+    } else {
       await AsyncStorage.setItem('token', response.token);
       await AsyncStorage.setItem('user', JSON.stringify(response.user));
       setToken(response.token);
       setUser(response.user);
-    } catch (error) {
-      throw error;
     }
   };
 
@@ -86,9 +83,24 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     AsyncStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
+  // Fetches fresh user data from /api/auth/me and updates stored state.
+  // Used on the pending screen so caregivers can check approval status.
+  const refreshUserStatus = async () => {
+    try {
+      const response = await ApiService.getMe();
+      const freshUser: User = response.data.data.user;
+      await AsyncStorage.setItem('user', JSON.stringify(freshUser));
+      setUser(freshUser);
+    } catch (error: any) {
+      // If the request fails (e.g. deactivated account / expired token), log out
+      console.error('refreshUserStatus failed:', error?.response?.data || error);
+      await logout();
+    }
+  };
+
   return (
     <AuthContext.Provider
-      value={{user, token, loading, login, register, logout, updateUser}}>
+      value={{user, token, loading, login, register, logout, updateUser, refreshUserStatus}}>
       {children}
     </AuthContext.Provider>
   );

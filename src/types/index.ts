@@ -6,6 +6,8 @@ export interface User {
   phone?: string;
   address?: string;
   isActive?: boolean;
+  isVerified?: boolean;
+  rejectionReason?: string;
   registrationFeePaid?: boolean;
   profileImage?: string;
 }

@@ -30,38 +30,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(0);
-
-  const calculatePasswordStrength = (pwd: string) => {
-    let strength = 0;
-    if (pwd.length >= 8) strength += 1;
-    if (pwd.length >= 12) strength += 1;
-    if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) strength += 1;
-    if (/\d/.test(pwd)) strength += 1;
-    if (/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) strength += 1;
-    return strength;
-  };
-
-  const getStrengthColor = () => {
-    if (passwordStrength <= 1) return '#ef4444';
-    if (passwordStrength <= 2) return '#f59e0b';
-    if (passwordStrength <= 3) return '#eab308';
-    if (passwordStrength <= 4) return '#84cc16';
-    return '#22c55e';
-  };
-
-  const getStrengthText = () => {
-    if (passwordStrength === 0) return '';
-    if (passwordStrength <= 1) return 'Weak';
-    if (passwordStrength <= 2) return 'Fair';
-    if (passwordStrength <= 3) return 'Good';
-    if (passwordStrength <= 4) return 'Strong';
-    return 'Very Strong';
-  };
-
   const handlePasswordChange = (text: string) => {
     setPassword(text);
-    setPasswordStrength(calculatePasswordStrength(text));
   };
 
   const handleLogin = async () => {
@@ -235,28 +205,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                 </View>
               </View>
 
-              {password.length > 0 && (
-                <View style={styles.strengthContainer}>
-                  <View style={styles.strengthBarBackground}>
-                    <View
-                      style={[
-                        styles.strengthBarFill,
-                        {
-                          width: `${(passwordStrength / 5) * 100}%`,
-                          backgroundColor: getStrengthColor(),
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.strengthText, {color: getStrengthColor()}]}>
-                    {getStrengthText()}
-                  </Text>
-                </View>
-              )}
 
               <TouchableOpacity
                 style={styles.forgotPassword}
-                onPress={() => navigation.navigate('ForgotPassword')}>
+                onPress={() =>
+                  Alert.alert(
+                    'Forgot Password',
+                    'Please select your account type',
+                    [
+                      {
+                        text: 'Caregiver',
+                        onPress: () =>
+                          navigation.navigate('CaregiverForgotPassword'),
+                      },
+                      {
+                        text: 'Care Receiver',
+                        onPress: () =>
+                          navigation.navigate('CareReceiverForgotPassword'),
+                      },
+                      {text: 'Cancel', style: 'cancel'},
+                    ],
+                  )
+                }>
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
 
@@ -559,26 +529,6 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginLeft: 16,
     fontWeight: '600',
-  },
-  strengthContainer: {
-    marginTop: -10,
-    marginBottom: 10,
-  },
-  strengthBarBackground: {
-    height: 4,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  strengthBarFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  strengthText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'right',
   },
 });
 
