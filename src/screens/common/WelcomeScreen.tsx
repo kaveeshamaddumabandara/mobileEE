@@ -52,16 +52,13 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({navigation}) => {
                   onPress={() => navigation.navigate('CareReceiverRegister')}
                   activeOpacity={0.8}>
                   <View style={styles.roleButtonContent}>
-                    <View style={styles.roleIconWrapper}>
-                      <Icon name="home" size={22} color="#7c3aed" />
-                    </View>
                     <View style={styles.roleTextWrapper}>
-                      <Text style={styles.roleTitle}>Find a Caregiver</Text>
+                      <Text style={styles.roleTitle}>Become a Care Receiver</Text>
                       <Text style={styles.roleDescription}>
                         I need care services
                       </Text>
                     </View>
-                    <Icon name="arrow-right" size={20} color="#9ca3af" />
+                    <Icon name="arrow-right" size={40} color="#9ca3af" />
                   </View>
                 </TouchableOpacity>
 
@@ -69,17 +66,14 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({navigation}) => {
                   style={[styles.roleButton, styles.caregiverButton]}
                   onPress={() => navigation.navigate('CaregiverRegister')}
                   activeOpacity={0.8}>
-                  <View style={styles.roleButtonContent}>
-                    <View style={styles.roleIconWrapper}>
-                      <Icon name="briefcase" size={22} color="#7c3aed" />
-                    </View>
+                  <View style={styles.roleButtonContent}>  
                     <View style={styles.roleTextWrapper}>
-                      <Text style={styles.roleTitle}>Become a Caregiver</Text>
+                      <Text style={styles.roleTitle}>Become a Care Giver</Text>
                       <Text style={styles.roleDescription}>
                         I provide care services
                       </Text>
                     </View>
-                    <Icon name="arrow-right" size={20} color="#9ca3af" />
+                    <Icon name="arrow-right" size={40} color="#9ca3af" />
                   </View>
                 </TouchableOpacity>
 
