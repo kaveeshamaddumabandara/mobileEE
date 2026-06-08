@@ -941,14 +941,6 @@ const CaregiverBookingsScreen: React.FC = () => {
                     />
                     <View style={styles.profileInfo}>
                       <Text style={styles.profileName}>{selectedBooking.careReceiverName}</Text>
-                      <View style={styles.profileTags}>
-                        <View style={styles.tag}>
-                          <Text style={styles.tagText}>{selectedBooking.careReceiverDetails.age} years</Text>
-                        </View>
-                        <View style={styles.tag}>
-                          <Text style={styles.tagText}>{selectedBooking.careReceiverDetails.gender}</Text>
-                        </View>
-                      </View>
                     </View>
                   </View>
 
@@ -1018,32 +1010,6 @@ const CaregiverBookingsScreen: React.FC = () => {
                     </View>
                   </View>
 
-                  {/* Medical History */}
-                  <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                      <Icon name="file-text" size={18} color="#3b82f6" />
-                      <Text style={styles.sectionTitle}>Medical History</Text>
-                    </View>
-                    <View style={styles.medicalBox}>
-                      {selectedBooking.careReceiverDetails.medicalHistory.map((item, idx) => (
-                        <View key={idx} style={styles.medicalItem}>
-                          <Icon name="check" size={14} color="#3b82f6" />
-                          <Text style={styles.medicalText}>{item}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Biography */}
-                  <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                      <Icon name="user" size={18} color="#6b7280" />
-                      <Text style={styles.sectionTitle}>About</Text>
-                    </View>
-                    <Text style={styles.biographyText}>
-                      {selectedBooking.careReceiverDetails.biography}
-                    </Text>
-                  </View>
                 </>
               )}
             </ScrollView>

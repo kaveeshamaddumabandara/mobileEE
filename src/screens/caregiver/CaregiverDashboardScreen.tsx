@@ -41,8 +41,8 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
     clients: 0,
     hours: 0,
     rating: 0,
+    totalReviews: 0,
   });
-  const [clientSatisfaction, setClientSatisfaction] = useState<any[]>([]);
   const [allFeedback, setAllFeedback] = useState<any[]>([]);
   const [allSchedule, setAllSchedule] = useState<any[]>([]);
   
@@ -62,14 +62,8 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
       // Fetch dashboard stats
       const statsResponse = await api.getCaregiverDashboardStats();
       console.log('Stats response:', statsResponse);
-      setDashboardStats(statsResponse || { earnings: 0, clients: 0, hours: 0, rating: 0 });
-      
-      // Fetch client satisfaction
-      const satisfactionResponse = await api.getCaregiverClientSatisfaction();
-      console.log('Satisfaction response:', satisfactionResponse);
-      const satisfactionData = satisfactionResponse?.satisfaction || [];
-      setClientSatisfaction(Array.isArray(satisfactionData) ? satisfactionData : []);
-      
+      setDashboardStats(statsResponse || { earnings: 0, clients: 0, hours: 0, rating: 0, totalReviews: 0 });
+
       // Fetch feedback
       const feedbackData = await api.getCaregiverFeedback();
       setAllFeedback(Array.isArray(feedbackData) ? feedbackData : []);
@@ -101,7 +95,6 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
       // Set empty arrays to prevent undefined errors
       setAllFeedback([]);
       setAllSchedule([]);
-      setClientSatisfaction([]);
     } finally {
       setLoading(false);
     }
@@ -212,8 +205,8 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
           />
           <StatCard
             icon="star"
-            value={dashboardStats.rating.toFixed(1)}
-            label="Average Rating"
+            value={dashboardStats.rating > 0 ? `${dashboardStats.rating.toFixed(1)} ★` : 'N/A'}
+            label={`Rating (${dashboardStats.totalReviews} reviews)`}
             color="#F59E0B"
           />
         </View>
@@ -294,56 +287,6 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
           )}
         </SectionCard>
 
-        {/* Client Satisfaction */}
-        {clientSatisfaction.length > 0 && (
-          <SectionCard
-            title="Client Satisfaction"
-            subtitle="Based on 80 reviews"
-            style={styles.section}>
-            <View style={styles.satisfactionContainer}>
-              {clientSatisfaction.map((item, index) => (
-                <View key={index} style={styles.satisfactionRow}>
-                  <View style={styles.satisfactionLabel}>
-                    <View
-                      style={[
-                        styles.satisfactionDot,
-                        {backgroundColor: item.color},
-                      ]}
-                    />
-                    <Text style={styles.satisfactionText}>{item.category}</Text>
-                  </View>
-                  <View style={styles.satisfactionBarContainer}>
-                    <View
-                      style={[
-                        styles.satisfactionBar,
-                        {
-                          width: `${item.percentage}%`,
-                          backgroundColor: item.color,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.satisfactionPercentage}>
-                    {item.percentage}%
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <View style={styles.satisfactionSummary}>
-              <View style={styles.summaryItem}>
-                <Icon name="star" size={20} color="#f59e0b" />
-                <Text style={styles.summaryValue}>4.9/5.0</Text>
-                <Text style={styles.summaryLabel}>Average Rating</Text>
-              </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Icon name="thumbs-up" size={20} color="#10b981" />
-                <Text style={styles.summaryValue}>91%</Text>
-                <Text style={styles.summaryLabel}>Satisfaction</Text>
-              </View>
-            </View>
-          </SectionCard>
-        )}
 
         {/* Recent Feedback */}
         <SectionCard
@@ -511,75 +454,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
-  },
-  satisfactionContainer: {
-    gap: 16,
-    marginBottom: 20,
-  },
-  satisfactionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  satisfactionLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 90,
-    gap: 8,
-  },
-  satisfactionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  satisfactionText: {
-    fontSize: 13,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  satisfactionBarContainer: {
-    flex: 1,
-    height: 24,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  satisfactionBar: {
-    height: '100%',
-    borderRadius: 12,
-  },
-  satisfactionPercentage: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    width: 40,
-    textAlign: 'right',
-  },
-  satisfactionSummary: {
-    flexDirection: 'row',
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 4,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 8,
-  },
-  summaryDivider: {
-    width: 1,
-    backgroundColor: '#e5e7eb',
-    marginHorizontal: 16,
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#6b7280',
   },
   feedbackItem: {
     backgroundColor: '#f9fafb',

@@ -47,8 +47,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
     dateOfBirth: '',
     address: '',
     city: '',
-    state: '',
-    zipCode: '',
+    district: '',
     yearsOfExperience: '',
     specializations: [] as string[],
     certifications: '',
@@ -297,7 +296,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
       Alert.alert('Error', 'Please enter phone number and date of birth');
       return;
     }
-    if (!formData.address || !formData.city || !formData.state || !formData.zipCode) {
+    if (!formData.address || !formData.city || !formData.district) {
       Alert.alert('Error', 'Please complete your address information');
       return;
     }
@@ -339,8 +338,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         dateOfBirth: formData.dateOfBirth,
         address: formData.address,
         city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
+        district: formData.district,
         yearsOfExperience: parseInt(formData.yearsOfExperience, 10),
         specializations: formData.specializations,
         certifications: formData.certifications,
@@ -554,43 +552,35 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
               <Text style={styles.sectionTitle}>Address</Text>
             </View>
 
-            <Text style={styles.label}>Street Address *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.address}
-              onChangeText={value => handleChange('address', value)}
-              placeholder="123 Main St"
-            />
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Street Address *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.address}
+                onChangeText={value => handleChange('address', value)}
+                placeholder="Enter your address"
+                multiline
+              />
+            </View>
 
-            <View style={styles.row}>
-              <View style={styles.thirdInput}>
-                <Text style={styles.label}>City *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.city}
-                  onChangeText={value => handleChange('city', value)}
-                  placeholder="City"
-                />
-              </View>
-              <View style={styles.thirdInput}>
-                <Text style={styles.label}>State *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.state}
-                  onChangeText={value => handleChange('state', value)}
-                  placeholder="State"
-                />
-              </View>
-              <View style={styles.thirdInput}>
-                <Text style={styles.label}>Postal Code*</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.zipCode}
-                  onChangeText={value => handleChange('zipCode', value)}
-                  placeholder="12345"
-                  keyboardType="number-pad"
-                />
-              </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>City *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.city}
+                onChangeText={value => handleChange('city', value)}
+                placeholder="Enter your city"
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>District *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.district}
+                onChangeText={value => handleChange('district', value)}
+                placeholder="Enter your district"
+              />
             </View>
           </View>
 
@@ -1056,6 +1046,10 @@ const styles = StyleSheet.create({
   },
   thirdInput: {
     flex: 1,
+  },
+  inputContainer: {
+    gap: 8,
+    marginTop: 4,
   },
   checkboxGrid: {
     flexDirection: 'row',
