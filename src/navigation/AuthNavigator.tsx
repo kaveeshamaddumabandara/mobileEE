@@ -11,6 +11,9 @@ import LoginScreen from '../screens/common/LoginScreen';
 import CaregiverRegisterScreen from '../screens/common/CaregiverRegisterScreen';
 import CareReceiverRegisterScreen from '../screens/common/CareReceiverRegisterScreen';
 import ForgotPasswordScreen from '../screens/common/ForgotPasswordScreen';
+import CaregiverForgotPasswordScreen from '../screens/common/CaregiverForgotPasswordScreen';
+import CareReceiverForgotPasswordScreen from '../screens/common/CareReceiverForgotPasswordScreen';
+import ResetPasswordScreen from '../screens/common/ResetPasswordScreen';
 import ContactUsScreen from '../screens/common/ContactUsScreen';
 import AboutUsScreen from '../screens/common/AboutUsScreen';
 
@@ -61,6 +64,15 @@ const AuthNavigator: React.FC = () => {
         component={CareReceiverRegisterScreen}
       />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen
+        name="CaregiverForgotPassword"
+        component={CaregiverForgotPasswordScreen}
+      />
+      <Stack.Screen
+        name="CareReceiverForgotPassword"
+        component={CareReceiverForgotPasswordScreen}
+      />
+      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
       <Stack.Screen name="ContactUs" component={ContactUsScreen} />
       <Stack.Screen name="AboutUs" component={AboutUsScreen} />
     </Stack.Navigator>

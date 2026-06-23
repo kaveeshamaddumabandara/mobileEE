@@ -16,6 +16,36 @@ import {
 // For iOS Simulator use localhost, for Android Emulator use 10.0.2.2, for physical device use your computer's IP
 const API_BASE_URL = 'http://localhost:3001/api';
 
+const mapCareReceiverProfile = (careReceiver: any): CareReceiver => {
+  const userData = careReceiver.userId;
+
+  if (!userData) {
+    throw new Error('User data not populated in care receiver profile');
+  }
+
+  return {
+    ...userData,
+    _id: userData._id,
+    role: 'carereceiver',
+    name: userData.name,
+    email: userData.email,
+    phone: userData.phone,
+    profileImage: userData.profileImage,
+    medicalConditions:
+      careReceiver.medicalHistory?.map((m: any) => m.condition).filter(Boolean) ||
+      [],
+    careRequirements:
+      careReceiver.careRequirements ||
+      careReceiver.careNeeds?.join(', ') ||
+      '',
+    emergencyContact: userData.emergencyContact || careReceiver.emergencyContact,
+    address: userData.address?.street || '',
+    city: userData.address?.city || '',
+    district: userData.address?.state || '',
+    dateOfBirth: userData.dateOfBirth,
+  };
+};
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -90,6 +120,10 @@ class ApiService {
     };
   }
 
+  async getMe() {
+    return this.api.get('/auth/me');
+  }
+
   async forgotPassword(email: string): Promise<{message: string}> {
     const response = await this.api.post('/auth/forgotpassword', {email});
     return response.data;
@@ -123,38 +157,7 @@ class ApiService {
     
     if (parsedUser?.role === 'carereceiver') {
       const response = await this.api.get('/carereceiver/profile');
-      console.log('🌐 Backend response:', JSON.stringify(response.data, null, 2));
-      // Backend returns {status, data: {careReceiver}} where careReceiver has populated userId
-      const careReceiver = response.data.data.careReceiver;
-      const userData = careReceiver.userId;
-      
-      console.log('👤 userData:', JSON.stringify(userData, null, 2));
-      console.log('📛 userData.name:', userData?.name);
-      
-      if (!userData) {
-        throw new Error('User data not populated in care receiver profile');
-      }
-      
-      // Merge User data with CareReceiver data
-      const mergedData = {
-        ...userData,
-        _id: userData._id,
-        name: userData.name,
-        email: userData.email,
-        phone: userData.phone,
-        profileImage: userData.profileImage,
-        medicalConditions: careReceiver.medicalHistory?.map((m: any) => m.condition).filter(Boolean) || [],
-        careRequirements: careReceiver.careNeeds?.join(', ') || '',
-        emergencyContact: userData.emergencyContact || careReceiver.emergencyContact,
-        // Map address fields from User.address object
-        address: userData.address?.street || '',
-        city: userData.address?.city || '',
-        district: userData.address?.state || '',
-        dateOfBirth: userData.dateOfBirth,
-      };
-      
-      console.log('✅ Merged profile data:', JSON.stringify(mergedData, null, 2));
-      return mergedData;
+      return mapCareReceiverProfile(response.data.data.careReceiver);
     }
     
     const response = await this.api.get<User>('/profile');
@@ -293,11 +296,11 @@ class ApiService {
   async updateCareReceiverProfile(
     data: Partial<CareReceiver>,
   ): Promise<CareReceiver> {
-    const response = await this.api.put<CareReceiver>(
+    const response = await this.api.put(
       '/carereceiver/profile',
       data,
     );
-    return response.data;
+    return mapCareReceiverProfile(response.data.data.careReceiver);
   }
 
   async requestCaregiver(caregiverId: string): Promise<{message: string}> {
@@ -444,6 +447,21 @@ class ApiService {
   // Booking creation (Care Receiver)
   async getStripeConfig(): Promise<{publishableKey: string}> {
     const response = await this.api.get('/payments/stripe/config');
+    return response.data.data;
+  }
+
+  async getCaregiverBookedSlots(caregiverId: string, date: Date): Promise<
+    Array<{
+      startTime: string;
+      endTime: string;
+      duration?: number;
+      status?: string;
+    }>
+  > {
+    const dateParam = date.toISOString().split('T')[0];
+    const response = await this.api.get(
+      `/carereceiver/caregivers/${caregiverId}/booked-slots?date=${dateParam}`,
+    );
     return response.data.data;
   }
 

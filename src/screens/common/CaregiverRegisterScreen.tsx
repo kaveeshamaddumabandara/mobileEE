@@ -31,6 +31,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
   navigation,
 }) => {
   const {logout, register} = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -46,13 +47,14 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
     dateOfBirth: '',
     address: '',
     city: '',
-    state: '',
-    zipCode: '',
+    district: '',
     yearsOfExperience: '',
     specializations: [] as string[],
     certifications: '',
     education: '',
     hourlyRate: '',
+    workStartTime: '',
+    workEndTime: '',
     bio: '',
     languages: [] as string[],
     proofDocuments: [] as Array<{uri: string; name: string; type: string}>,
@@ -296,7 +298,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
       Alert.alert('Error', 'Please enter phone number and date of birth');
       return;
     }
-    if (!formData.address || !formData.city || !formData.state || !formData.zipCode) {
+    if (!formData.address || !formData.city || !formData.district) {
       Alert.alert('Error', 'Please complete your address information');
       return;
     }
@@ -310,6 +312,26 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
     }
     if (!formData.yearsOfExperience || !formData.hourlyRate) {
       Alert.alert('Error', 'Please complete your professional information');
+      return;
+    }
+    if (!formData.workStartTime.trim() || !formData.workEndTime.trim()) {
+      Alert.alert('Error', 'Please enter your working hours');
+      return;
+    }
+    const workTimePattern = /^([01]?\d|2[0-3]):[0-5]\d$/;
+    if (
+      !workTimePattern.test(formData.workStartTime.trim()) ||
+      !workTimePattern.test(formData.workEndTime.trim())
+    ) {
+      Alert.alert('Error', 'Working hours must be in HH:MM format (e.g. 09:00 and 17:00)');
+      return;
+    }
+    const [startHour, startMinute] = formData.workStartTime.trim().split(':').map(Number);
+    const [endHour, endMinute] = formData.workEndTime.trim().split(':').map(Number);
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+    if (endTotalMinutes <= startTotalMinutes) {
+      Alert.alert('Error', 'Work end time must be after work start time');
       return;
     }
     if (!formData.education || !formData.bio) {
@@ -338,38 +360,43 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         dateOfBirth: formData.dateOfBirth,
         address: formData.address,
         city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
+        district: formData.district,
         yearsOfExperience: parseInt(formData.yearsOfExperience, 10),
         specializations: formData.specializations,
         certifications: formData.certifications,
         education: formData.education,
         hourlyRate: parseFloat(formData.hourlyRate),
+        workStartTime: formData.workStartTime.trim(),
+        workEndTime: formData.workEndTime.trim(),
         bio: formData.bio,
         languages: formData.languages,
       };
 
-      // Register and persist token via AuthContext
+      // Register — for caregivers this stores the token temporarily (no user state set)
+      // so RootNavigator stays on the Auth stack during the upload step.
       await register(registrationData);
 
-      // Upload qualification documents using the now-active token
+      // Upload documents while the temporary token is in AsyncStorage
       try {
         await ApiService.uploadCaregiverDocuments(formData.proofDocuments);
       } catch (uploadError: any) {
         console.error('Document upload error:', uploadError);
-        // Registration succeeded; warn but don't block the user
         Alert.alert(
           'Documents Upload Failed',
-          'Your account was created but we could not upload your proof documents. You can re-upload them from your profile settings.',
+          'Your account was created but we could not upload your documents. You can re-upload them after your account is approved.',
         );
       }
+
+      // Clear the temporary auth token — the caregiver must wait for approval
+      // before they can log in and use the app.
+      await logout();
 
       setLoading(false);
 
       Alert.alert(
-        'Registration Successful',
-        'Your caregiver account has been created and your documents have been submitted for review. Please pay the LKR 1,000 registration fee from the Payments section to activate your account.',
-        [{text: 'OK'}],
+        'Application Submitted!',
+        'Your caregiver registration has been submitted for admin review.\n\nYou will receive an email notification once your application is approved. After approval, log in and pay the LKR 1,000 registration fee to activate your account.',
+        [{text: 'OK', onPress: () => navigation.navigate('Login')}],
       );
     } catch (error: any) {
       setLoading(false);
@@ -549,43 +576,35 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
               <Text style={styles.sectionTitle}>Address</Text>
             </View>
 
-            <Text style={styles.label}>Street Address *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.address}
-              onChangeText={value => handleChange('address', value)}
-              placeholder="123 Main St"
-            />
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Street Address *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.address}
+                onChangeText={value => handleChange('address', value)}
+                placeholder="Enter your address"
+                multiline
+              />
+            </View>
 
-            <View style={styles.row}>
-              <View style={styles.thirdInput}>
-                <Text style={styles.label}>City *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.city}
-                  onChangeText={value => handleChange('city', value)}
-                  placeholder="City"
-                />
-              </View>
-              <View style={styles.thirdInput}>
-                <Text style={styles.label}>State *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.state}
-                  onChangeText={value => handleChange('state', value)}
-                  placeholder="State"
-                />
-              </View>
-              <View style={styles.thirdInput}>
-                <Text style={styles.label}>Postal Code*</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.zipCode}
-                  onChangeText={value => handleChange('zipCode', value)}
-                  placeholder="12345"
-                  keyboardType="number-pad"
-                />
-              </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>City *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.city}
+                onChangeText={value => handleChange('city', value)}
+                placeholder="Enter your city"
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>District *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.district}
+                onChangeText={value => handleChange('district', value)}
+                placeholder="Enter your district"
+              />
             </View>
           </View>
 
@@ -742,6 +761,43 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
               ))}
             </View>
 
+          </View>
+
+          {/* Working Hours Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Icon name="clock" size={22} color="#9333ea" />
+              <Text style={styles.sectionTitle}>Working Hours</Text>
+            </View>
+            <Text style={styles.sectionHint}>
+              Enter the hours you are available to work each day. Care receivers will see this when booking.
+            </Text>
+
+            <View style={styles.row}>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Work Start Time *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.workStartTime}
+                  onChangeText={value => handleChange('workStartTime', value)}
+                  placeholder="09:00"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              </View>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Work End Time *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.workEndTime}
+                  onChangeText={value => handleChange('workEndTime', value)}
+                  placeholder="17:00"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              </View>
+            </View>
+            <Text style={styles.inputHint}>Use 24-hour format (HH:MM), e.g. 09:00 and 17:00</Text>
           </View>
 
           {/* Qualifications Section */}
@@ -1013,6 +1069,17 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginLeft: 0,
   },
+  sectionHint: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  inputHint: {
+    fontSize: 13,
+    color: '#9ca3af',
+    marginTop: 8,
+  },
   label: {
     fontSize: 15,
     fontWeight: '600',
@@ -1051,6 +1118,10 @@ const styles = StyleSheet.create({
   },
   thirdInput: {
     flex: 1,
+  },
+  inputContainer: {
+    gap: 8,
+    marginTop: 4,
   },
   checkboxGrid: {
     flexDirection: 'row',

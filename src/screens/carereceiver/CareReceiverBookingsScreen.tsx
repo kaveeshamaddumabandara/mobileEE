@@ -23,6 +23,16 @@ import {Caregiver, CareReceiver} from '../../types';
 import SideMenu from '../../components/SideMenu';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {useStripe} from '@stripe/stripe-react-native';
+import {
+  BookedSlot,
+  formatBookedSlotLabel,
+  formatHourLabel,
+  getAvailableBookingHours,
+  getMinimumBookingDate,
+  getWorkingHoursLabel,
+  isBookingTimeUnavailable,
+  isSlotUnavailable,
+} from '../../utils/bookingOverlap';
 
 type CareReceiverBookingsScreenNavigationProp = NativeStackNavigationProp<
   CareReceiverTabParamList,
@@ -58,15 +68,16 @@ const CareReceiverBookingsScreen: React.FC = () => {
   // Booking form states
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
   const [selectedCaregiver, setSelectedCaregiver] = useState<Caregiver | null>(null);
-  const [bookingDate, setBookingDate] = useState(new Date());
+  const [bookingDate, setBookingDate] = useState(getMinimumBookingDate());
   const [bookingTime, setBookingTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [bookingLocation, setBookingLocation] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
   const [serviceType, setServiceType] = useState('General Care');
   const [durationHours, setDurationHours] = useState(1);
   const [submittingBooking, setSubmittingBooking] = useState(false);
+  const [bookedSlots, setBookedSlots] = useState<BookedSlot[]>([]);
+  const [loadingBookedSlots, setLoadingBookedSlots] = useState(false);
   
   // Profile modal state
   const [profileModalVisible, setProfileModalVisible] = useState(false);
@@ -129,6 +140,69 @@ const CareReceiverBookingsScreen: React.FC = () => {
       loadMyBookings();
     }
   }, [activeTab]);
+
+  const loadBookedSlots = React.useCallback(async (caregiverId: string, date: Date) => {
+    try {
+      setLoadingBookedSlots(true);
+      const slots = await ApiService.getCaregiverBookedSlots(caregiverId, date);
+      setBookedSlots(Array.isArray(slots) ? slots : []);
+    } catch (error) {
+      console.error('Error loading booked slots:', error);
+      setBookedSlots([]);
+    } finally {
+      setLoadingBookedSlots(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (bookingModalVisible && selectedCaregiver?._id) {
+      loadBookedSlots(selectedCaregiver._id, bookingDate);
+    } else {
+      setBookedSlots([]);
+    }
+  }, [bookingModalVisible, selectedCaregiver?._id, bookingDate, loadBookedSlots]);
+
+  useEffect(() => {
+    if (!bookingModalVisible || loadingBookedSlots) {
+      return;
+    }
+
+    if (isBookingTimeUnavailable(
+      bookingTime,
+      durationHours,
+      bookedSlots,
+      selectedCaregiver?.workStartTime,
+      selectedCaregiver?.workEndTime,
+    )) {
+      const firstAvailableHour = getAvailableBookingHours(
+        durationHours,
+        selectedCaregiver?.workStartTime,
+        selectedCaregiver?.workEndTime,
+      ).find(
+        hour =>
+          !isSlotUnavailable(
+            hour * 60,
+            durationHours,
+            bookedSlots,
+            selectedCaregiver?.workStartTime,
+            selectedCaregiver?.workEndTime,
+          ),
+      );
+
+      if (firstAvailableHour !== undefined) {
+        const nextTime = new Date(bookingDate);
+        nextTime.setHours(firstAvailableHour, 0, 0, 0);
+        setBookingTime(nextTime);
+      }
+    }
+  }, [
+    bookingModalVisible,
+    loadingBookedSlots,
+    bookedSlots,
+    durationHours,
+    bookingDate,
+    bookingTime,
+  ]);
 
   const loadProfile = async () => {
     try {
@@ -257,13 +331,15 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const handleBookNow = (caregiver: Caregiver) => {
     setSelectedCaregiver(caregiver);
     setShowDatePicker(false);
-    setShowTimePicker(false);
+    setBookingDate(getMinimumBookingDate());
+    const defaultTime = new Date();
+    defaultTime.setHours(9, 0, 0, 0);
+    setBookingTime(defaultTime);
     setBookingModalVisible(true);
   };
 
   const closeBookingModal = () => {
     setShowDatePicker(false);
-    setShowTimePicker(false);
     setBookingModalVisible(false);
   };
 
@@ -291,6 +367,38 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const calculatedAmount = (selectedCaregiver?.hourlyRate || 0) * durationHours;
   const advanceAmount = Number((calculatedAmount * 0.5).toFixed(2));
   const remainingAmount = Number((calculatedAmount - advanceAmount).toFixed(2));
+  const availableBookingHours = getAvailableBookingHours(
+    durationHours,
+    selectedCaregiver?.workStartTime,
+    selectedCaregiver?.workEndTime,
+  );
+  const workingHoursLabel = getWorkingHoursLabel(
+    selectedCaregiver?.workStartTime,
+    selectedCaregiver?.workEndTime,
+  );
+  const hasTimeConflict = isBookingTimeUnavailable(
+    bookingTime,
+    durationHours,
+    bookedSlots,
+    selectedCaregiver?.workStartTime,
+    selectedCaregiver?.workEndTime,
+  );
+  const hasAvailableSlot = availableBookingHours.some(
+    hour =>
+      !isSlotUnavailable(
+        hour * 60,
+        durationHours,
+        bookedSlots,
+        selectedCaregiver?.workStartTime,
+        selectedCaregiver?.workEndTime,
+      ),
+  );
+
+  const handleSelectTimeSlot = (hour: number) => {
+    const nextTime = new Date(bookingDate);
+    nextTime.setHours(hour, 0, 0, 0);
+    setBookingTime(nextTime);
+  };
 
   const handleSubmitBooking = () => {
     if (!selectedCaregiver?._id) {
@@ -307,6 +415,14 @@ const CareReceiverBookingsScreen: React.FC = () => {
 
     if (!bookingLocation.trim()) {
       Alert.alert('Error', 'Please enter a location');
+      return;
+    }
+
+    if (hasTimeConflict) {
+      Alert.alert(
+        'Time Unavailable',
+        'The selected time overlaps with an existing booking for this caregiver. Please choose another time slot.',
+      );
       return;
     }
 
@@ -411,11 +527,13 @@ const CareReceiverBookingsScreen: React.FC = () => {
 
   const resetBookingForm = () => {
     setSelectedCaregiver(null);
-    setBookingDate(new Date());
-    setBookingTime(new Date());
+    setBookingDate(getMinimumBookingDate());
+    const defaultTime = new Date();
+    defaultTime.setHours(9, 0, 0, 0);
+    setBookingTime(defaultTime);
+    setBookedSlots([]);
     setDurationHours(1);
     setShowDatePicker(false);
-    setShowTimePicker(false);
     setBookingLocation(careReceiverProfile?.address || '');
     setBookingNotes('');
     setServiceType('General Care');
@@ -428,16 +546,6 @@ const CareReceiverBookingsScreen: React.FC = () => {
 
     if (event?.type === 'set' && selectedDate) {
       setBookingDate(selectedDate);
-    }
-  };
-
-  const handleTimeChange = (event: any, selectedTime?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowTimePicker(false);
-    }
-
-    if (event?.type === 'set' && selectedTime) {
-      setBookingTime(selectedTime);
     }
   };
 
@@ -1149,6 +1257,14 @@ const CareReceiverBookingsScreen: React.FC = () => {
                     <Text style={styles.selectedCaregiverRate}>
                       Rs.{selectedCaregiver.hourlyRate}/hour
                     </Text>
+                    {workingHoursLabel && (
+                      <View style={styles.workingHoursRow}>
+                        <Icon name="clock" size={14} color="#6b7280" />
+                        <Text style={styles.workingHoursText}>
+                          Working hours: {workingHoursLabel}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               )}
@@ -1183,7 +1299,6 @@ const CareReceiverBookingsScreen: React.FC = () => {
                   onPress={() => {
                     if (Platform.OS === 'ios') {
                       setShowDatePicker(prev => !prev);
-                      setShowTimePicker(false);
                     } else {
                       setShowDatePicker(true);
                     }
@@ -1212,7 +1327,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
                       value={bookingDate}
                       mode="date"
                       display="spinner"
-                      minimumDate={new Date()}
+                      minimumDate={getMinimumBookingDate()}
                       onChange={handleDateChange}
                     />
                   </View>
@@ -1221,41 +1336,77 @@ const CareReceiverBookingsScreen: React.FC = () => {
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Time</Text>
-                <TouchableOpacity
-                  style={styles.dateTimeButton}
-                  onPress={() => {
-                    if (Platform.OS === 'ios') {
-                      setShowTimePicker(prev => !prev);
-                      setShowDatePicker(false);
-                    } else {
-                      setShowTimePicker(true);
-                    }
-                  }}>
-                  <Icon name="clock" size={20} color="#2563eb" />
-                  <Text style={styles.dateTimeText}>
-                    {bookingTime.toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </Text>
-                </TouchableOpacity>
-                {Platform.OS === 'ios' && showTimePicker && (
-                  <View style={styles.inlinePickerCard}>
-                    <View style={styles.inlinePickerHeader}>
-                      <Text style={styles.inlinePickerTitle}>Select Time</Text>
-                      <TouchableOpacity
-                        style={styles.inlinePickerDoneButton}
-                        onPress={() => setShowTimePicker(false)}>
-                        <Text style={styles.inlinePickerDoneText}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <DateTimePicker
-                      value={bookingTime}
-                      mode="time"
-                      display="spinner"
-                      onChange={handleTimeChange}
-                    />
+                {loadingBookedSlots ? (
+                  <View style={styles.bookedSlotsLoading}>
+                    <ActivityIndicator size="small" color="#2563eb" />
+                    <Text style={styles.bookedSlotsLoadingText}>Checking availability...</Text>
                   </View>
+                ) : (
+                  <>
+                    {bookedSlots.length > 0 && (
+                      <View style={styles.bookedSlotsCard}>
+                        <Text style={styles.bookedSlotsTitle}>Already booked on this date</Text>
+                        {bookedSlots.map((slot, index) => (
+                          <View key={`${slot.startTime}-${index}`} style={styles.bookedSlotRow}>
+                            <Icon name="slash" size={14} color="#dc2626" />
+                            <Text style={styles.bookedSlotText}>
+                              {formatBookedSlotLabel(slot)}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {!hasAvailableSlot ? (
+                      <View style={styles.noSlotsCard}>
+                        <Text style={styles.noSlotsText}>
+                          No available time slots for a {durationHours}-hour booking on this date.
+                          Try another date or shorter duration.
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.timeSlotContainer}>
+                        {availableBookingHours.map(hour => {
+                          const blocked = isSlotUnavailable(
+                            hour * 60,
+                            durationHours,
+                            bookedSlots,
+                            selectedCaregiver?.workStartTime,
+                            selectedCaregiver?.workEndTime,
+                          );
+                          const isSelected =
+                            bookingTime.getHours() === hour && bookingTime.getMinutes() === 0;
+
+                          return (
+                            <TouchableOpacity
+                              key={hour}
+                              style={[
+                                styles.timeSlotChip,
+                                blocked && styles.timeSlotChipBlocked,
+                                isSelected && !blocked && styles.timeSlotChipActive,
+                              ]}
+                              disabled={blocked}
+                              onPress={() => handleSelectTimeSlot(hour)}>
+                              <Text
+                                style={[
+                                  styles.timeSlotChipText,
+                                  blocked && styles.timeSlotChipTextBlocked,
+                                  isSelected && !blocked && styles.timeSlotChipTextActive,
+                                ]}>
+                                {formatHourLabel(hour)}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {hasTimeConflict && hasAvailableSlot && (
+                      <Text style={styles.timeConflictText}>
+                        Selected time overlaps with an existing booking. Choose an available slot.
+                      </Text>
+                    )}
+                  </>
                 )}
               </View>
 
@@ -1325,8 +1476,14 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.confirmButton}
-                disabled={submittingBooking}
+                style={[
+                  styles.confirmButton,
+                  (submittingBooking || hasTimeConflict || !hasAvailableSlot || loadingBookedSlots) &&
+                    styles.confirmButtonDisabled,
+                ]}
+                disabled={
+                  submittingBooking || hasTimeConflict || !hasAvailableSlot || loadingBookedSlots
+                }
                 onPress={handleSubmitBooking}>
                 {submittingBooking ? (
                   <ActivityIndicator color="#fff" />
@@ -1473,9 +1630,24 @@ const CareReceiverBookingsScreen: React.FC = () => {
                       )}
                       {viewingCaregiver.availabilityType && (
                         <View style={styles.profileInfoItem}>
-                          <Icon name="clock" size={16} color="#6b7280" />
+                          <Icon name="calendar" size={16} color="#6b7280" />
                           <Text style={styles.profileInfoText}>
                             {viewingCaregiver.availabilityType}
+                          </Text>
+                        </View>
+                      )}
+                      {getWorkingHoursLabel(
+                        viewingCaregiver.workStartTime,
+                        viewingCaregiver.workEndTime,
+                      ) && (
+                        <View style={styles.profileInfoItem}>
+                          <Icon name="clock" size={16} color="#6b7280" />
+                          <Text style={styles.profileInfoText}>
+                            Working hours:{' '}
+                            {getWorkingHoursLabel(
+                              viewingCaregiver.workStartTime,
+                              viewingCaregiver.workEndTime,
+                            )}
                           </Text>
                         </View>
                       )}
@@ -1541,17 +1713,8 @@ const CareReceiverBookingsScreen: React.FC = () => {
           value={bookingDate}
           mode="date"
           display="default"
-          minimumDate={new Date()}
+          minimumDate={getMinimumBookingDate()}
           onChange={handleDateChange}
-        />
-      )}
-
-      {showTimePicker && Platform.OS === 'android' && (
-        <DateTimePicker
-          value={bookingTime}
-          mode="time"
-          display="default"
-          onChange={handleTimeChange}
         />
       )}
 
@@ -2241,6 +2404,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
   },
+  workingHoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  workingHoursText: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
   formGroup: {
     marginBottom: 20,
   },
@@ -2314,6 +2487,94 @@ const styles = StyleSheet.create({
   },
   durationChipTextActive: {
     color: '#fff',
+  },
+  bookedSlotsLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  bookedSlotsLoadingText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  bookedSlotsCard: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    gap: 6,
+  },
+  bookedSlotsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#991b1b',
+    marginBottom: 2,
+  },
+  bookedSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bookedSlotText: {
+    fontSize: 13,
+    color: '#b91c1c',
+  },
+  timeSlotContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  timeSlotChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    minWidth: '30%',
+    alignItems: 'center',
+  },
+  timeSlotChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  timeSlotChipBlocked: {
+    backgroundColor: '#f9fafb',
+    borderColor: '#e5e7eb',
+    opacity: 0.55,
+  },
+  timeSlotChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  timeSlotChipTextActive: {
+    color: '#fff',
+  },
+  timeSlotChipTextBlocked: {
+    color: '#9ca3af',
+    textDecorationLine: 'line-through',
+  },
+  timeConflictText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#dc2626',
+    fontWeight: '500',
+  },
+  noSlotsCard: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 10,
+    padding: 12,
+  },
+  noSlotsText: {
+    fontSize: 13,
+    color: '#9a3412',
+    lineHeight: 18,
   },
   amountSummaryCard: {
     marginTop: 10,
@@ -2389,6 +2650,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     backgroundColor: '#2563eb',
+  },
+  confirmButtonDisabled: {
+    backgroundColor: '#93c5fd',
   },
   confirmButtonText: {
     fontSize: 16,

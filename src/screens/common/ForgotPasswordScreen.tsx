@@ -39,9 +39,14 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
     try {
       await ApiService.forgotPassword(email);
       Alert.alert(
-        'Success',
-        'Password reset instructions have been sent to your email',
-        [{text: 'OK', onPress: () => navigation.goBack()}],
+        'Email Sent',
+        'Check your inbox for a "Mobile Reset Code". Then tap Continue to enter it and set a new password.',
+        [
+          {
+            text: 'Continue',
+            onPress: () => navigation.navigate('ResetPassword', {email}),
+          },
+        ],
       );
     } catch (error: any) {
       Alert.alert(

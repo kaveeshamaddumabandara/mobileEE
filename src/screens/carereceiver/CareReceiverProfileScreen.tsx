@@ -156,31 +156,37 @@ const CareReceiverProfileScreen: React.FC = () => {
 
   const handleSave = async () => {
     if (!profile) return;
-    
+
+    if (profileImage && !profileImage.startsWith('http')) {
+      Alert.alert('Error', 'Please wait for image upload to complete');
+      return;
+    }
+
     setLoading(true);
     try {
-      const updateData: any = {
-        ...profile,
+      const updateData = {
+        name: profile.name,
+        phone: profile.phone,
+        address: profile.address,
+        city: profile.city,
+        district: profile.district,
+        dateOfBirth: profile.dateOfBirth,
+        profileImage: profileImage || profile.profileImage,
+        emergencyContact: profile.emergencyContact,
+        medicalConditions: profile.medicalConditions || [],
+        careRequirements: profile.careRequirements || '',
       };
 
-      if (profileImage) {
-        if (profileImage.startsWith('http')) {
-          updateData.profileImage = profileImage;
-        } else {
-          Alert.alert('Error', 'Please wait for image upload to complete');
-          setLoading(false);
-          return;
-        }
-      }
+      const updatedProfile = await ApiService.updateCareReceiverProfile(updateData);
 
-      const updatedUser = await ApiService.updateCareReceiverProfile(updateData);
-      
-      if (profileImage) {
-        updateUser({...updatedUser, profileImage: profileImage});
-      } else {
-        updateUser(updatedUser);
-      }
-      
+      setProfile(updatedProfile);
+      setProfileImage(updatedProfile.profileImage || null);
+      updateUser({
+        ...(user || {}),
+        ...updatedProfile,
+        role: 'carereceiver',
+      });
+
       setIsEditing(false);
       Alert.alert('Success', 'Profile updated successfully');
     } catch (error: any) {

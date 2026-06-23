@@ -18,6 +18,7 @@ import SideMenu from '../../components/SideMenu';
 import api from '../../services/api';
 import {LineChart, PieChart} from 'react-native-chart-kit';
 import {useStripe} from '@stripe/stripe-react-native';
+import {useAuth} from '../../context/AuthContext';
 
 type PaymentNavigationProp = NativeStackNavigationProp<
   CaregiverTabParamList,
@@ -27,6 +28,7 @@ type PaymentNavigationProp = NativeStackNavigationProp<
 const CaregiverPaymentScreen: React.FC = () => {
   const navigation = useNavigation<PaymentNavigationProp>();
   const {initPaymentSheet, presentPaymentSheet} = useStripe();
+  const {refreshUserStatus} = useAuth();
   const [menuVisible, setMenuVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -165,14 +167,14 @@ const CaregiverPaymentScreen: React.FC = () => {
         paymentIntentId: paymentIntent.paymentIntentId,
       });
 
-      Alert.alert('Success!', 'Registration fee paid successfully.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            fetchPaymentData();
-          },
-        },
-      ]);
+      // Sync user context so RootNavigator reflects the activated state
+      await refreshUserStatus();
+
+      Alert.alert(
+        'Account Activated!',
+        'Registration fee paid successfully. Your caregiver account is now fully active and visible to care receivers.',
+        [{text: 'Continue', onPress: () => fetchPaymentData()}],
+      );
     } catch (error: any) {
       console.error('Error processing registration payment:', error);
       Alert.alert(
