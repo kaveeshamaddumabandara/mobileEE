@@ -53,6 +53,8 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
     certifications: '',
     education: '',
     hourlyRate: '',
+    workStartTime: '',
+    workEndTime: '',
     bio: '',
     languages: [] as string[],
     proofDocuments: [] as Array<{uri: string; name: string; type: string}>,
@@ -312,6 +314,26 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
       Alert.alert('Error', 'Please complete your professional information');
       return;
     }
+    if (!formData.workStartTime.trim() || !formData.workEndTime.trim()) {
+      Alert.alert('Error', 'Please enter your working hours');
+      return;
+    }
+    const workTimePattern = /^([01]?\d|2[0-3]):[0-5]\d$/;
+    if (
+      !workTimePattern.test(formData.workStartTime.trim()) ||
+      !workTimePattern.test(formData.workEndTime.trim())
+    ) {
+      Alert.alert('Error', 'Working hours must be in HH:MM format (e.g. 09:00 and 17:00)');
+      return;
+    }
+    const [startHour, startMinute] = formData.workStartTime.trim().split(':').map(Number);
+    const [endHour, endMinute] = formData.workEndTime.trim().split(':').map(Number);
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+    if (endTotalMinutes <= startTotalMinutes) {
+      Alert.alert('Error', 'Work end time must be after work start time');
+      return;
+    }
     if (!formData.education || !formData.bio) {
       Alert.alert('Error', 'Please complete your qualifications and bio');
       return;
@@ -344,6 +366,8 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         certifications: formData.certifications,
         education: formData.education,
         hourlyRate: parseFloat(formData.hourlyRate),
+        workStartTime: formData.workStartTime.trim(),
+        workEndTime: formData.workEndTime.trim(),
         bio: formData.bio,
         languages: formData.languages,
       };
@@ -739,6 +763,43 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
 
           </View>
 
+          {/* Working Hours Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Icon name="clock" size={22} color="#9333ea" />
+              <Text style={styles.sectionTitle}>Working Hours</Text>
+            </View>
+            <Text style={styles.sectionHint}>
+              Enter the hours you are available to work each day. Care receivers will see this when booking.
+            </Text>
+
+            <View style={styles.row}>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Work Start Time *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.workStartTime}
+                  onChangeText={value => handleChange('workStartTime', value)}
+                  placeholder="09:00"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              </View>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Work End Time *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.workEndTime}
+                  onChangeText={value => handleChange('workEndTime', value)}
+                  placeholder="17:00"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              </View>
+            </View>
+            <Text style={styles.inputHint}>Use 24-hour format (HH:MM), e.g. 09:00 and 17:00</Text>
+          </View>
+
           {/* Qualifications Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -1007,6 +1068,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
     marginLeft: 0,
+  },
+  sectionHint: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  inputHint: {
+    fontSize: 13,
+    color: '#9ca3af',
+    marginTop: 8,
   },
   label: {
     fontSize: 15,

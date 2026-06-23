@@ -19,6 +19,7 @@ import {useAuth} from '../../context/AuthContext';
 import ApiService from '../../services/api';
 import {Caregiver} from '../../types';
 import SideMenu from '../../components/SideMenu';
+import {getWorkingHoursLabel} from '../../utils/bookingOverlap';
 
 type CaregiverProfileScreenNavigationProp = NativeStackNavigationProp<
   CaregiverTabParamList,
@@ -46,6 +47,8 @@ const CaregiverProfileScreen: React.FC = () => {
   const [certifications, setCertifications] = useState('');
   const [address, setAddress] = useState('');
   const [availability, setAvailability] = useState('');
+  const [workStartTime, setWorkStartTime] = useState('');
+  const [workEndTime, setWorkEndTime] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
 
@@ -81,6 +84,8 @@ const CaregiverProfileScreen: React.FC = () => {
         setAddress(userAddress || '');
       }
       setAvailability(data.availabilityType || '');
+      setWorkStartTime(data.workStartTime || '');
+      setWorkEndTime(data.workEndTime || '');
       setProfileImage(data.profileImage || user?.profileImage || null);
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -175,7 +180,36 @@ const CaregiverProfileScreen: React.FC = () => {
     }
   };
 
+  const validateWorkingHours = (): boolean => {
+    if (!workStartTime.trim() || !workEndTime.trim()) {
+      Alert.alert('Error', 'Please enter your working hours');
+      return false;
+    }
+
+    const workTimePattern = /^([01]?\d|2[0-3]):[0-5]\d$/;
+    if (!workTimePattern.test(workStartTime.trim()) || !workTimePattern.test(workEndTime.trim())) {
+      Alert.alert('Error', 'Working hours must be in HH:MM format (e.g. 09:00 and 17:00)');
+      return false;
+    }
+
+    const [startHour, startMinute] = workStartTime.trim().split(':').map(Number);
+    const [endHour, endMinute] = workEndTime.trim().split(':').map(Number);
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+
+    if (endTotalMinutes <= startTotalMinutes) {
+      Alert.alert('Error', 'Work end time must be after work start time');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSave = async () => {
+    if (!validateWorkingHours()) {
+      return;
+    }
+
     setLoading(true);
     try {
       const updateData: any = {
@@ -184,6 +218,8 @@ const CaregiverProfileScreen: React.FC = () => {
         specialization: specializations,
         languages: languages,
         certificationsText: certifications,
+        workStartTime: workStartTime.trim(),
+        workEndTime: workEndTime.trim(),
       };
 
       // Include profile image if it exists
@@ -457,6 +493,66 @@ const CaregiverProfileScreen: React.FC = () => {
           </View>
         </View>
 
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionHeaderRow}>
+              <Icon name="clock" size={20} color="#8b5cf6" />
+              <Text style={styles.sectionTitle}>Working Hours</Text>
+            </View>
+            <Text style={styles.sectionHint}>
+              These hours are shown to care receivers when they book your services.
+            </Text>
+          </View>
+
+          <View style={styles.workingHoursRow}>
+            <View style={styles.workingHoursField}>
+              <Text style={styles.infoLabel}>Work Start Time</Text>
+              {isEditing ? (
+                <TextInput
+                  style={styles.input}
+                  value={workStartTime}
+                  onChangeText={setWorkStartTime}
+                  placeholder="09:00"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              ) : (
+                <Text style={styles.infoValue}>
+                  {workStartTime || 'Not set'}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.workingHoursField}>
+              <Text style={styles.infoLabel}>Work End Time</Text>
+              {isEditing ? (
+                <TextInput
+                  style={styles.input}
+                  value={workEndTime}
+                  onChangeText={setWorkEndTime}
+                  placeholder="17:00"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              ) : (
+                <Text style={styles.infoValue}>
+                  {workEndTime || 'Not set'}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {!isEditing && getWorkingHoursLabel(workStartTime, workEndTime) && (
+            <Text style={styles.workingHoursSummary}>
+              Available: {getWorkingHoursLabel(workStartTime, workEndTime)}
+            </Text>
+          )}
+
+          {isEditing && (
+            <Text style={styles.inputHint}>Use 24-hour format (HH:MM), e.g. 09:00 and 17:00</Text>
+          )}
+        </View>
+
         {/* Qualifications */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -704,6 +800,35 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#111827',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  sectionHint: {
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 18,
+  },
+  workingHoursRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  workingHoursField: {
+    flex: 1,
+  },
+  workingHoursSummary: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#7c3aed',
+    fontWeight: '600',
+  },
+  inputHint: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 10,
   },
   inputContainer: {
     marginBottom: 16,

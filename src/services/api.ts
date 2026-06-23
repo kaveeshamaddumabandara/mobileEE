@@ -450,6 +450,21 @@ class ApiService {
     return response.data.data;
   }
 
+  async getCaregiverBookedSlots(caregiverId: string, date: Date): Promise<
+    Array<{
+      startTime: string;
+      endTime: string;
+      duration?: number;
+      status?: string;
+    }>
+  > {
+    const dateParam = date.toISOString().split('T')[0];
+    const response = await this.api.get(
+      `/carereceiver/caregivers/${caregiverId}/booked-slots?date=${dateParam}`,
+    );
+    return response.data.data;
+  }
+
   async createBookingPaymentIntent(bookingData: {
     caregiverId: string;
     serviceType: string;

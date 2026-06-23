@@ -28,6 +28,8 @@ export interface Caregiver extends User {
   availabilityType?: string;
   hasTransportation?: boolean;
   travelRadius?: string;
+  workStartTime?: string;
+  workEndTime?: string;
 }
 
 export interface CareReceiver extends User {
@@ -76,6 +78,8 @@ export interface RegisterData {
   hourlyRate?: number;
   bio?: string;
   languages?: string[];
+  workStartTime?: string;
+  workEndTime?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
