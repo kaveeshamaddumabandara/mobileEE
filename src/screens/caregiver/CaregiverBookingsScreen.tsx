@@ -19,6 +19,11 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {CaregiverTabParamList} from '../../navigation/types';
 import SideMenu from '../../components/SideMenu';
 import ApiService from '../../services/api';
+import {
+  isBookingExpired,
+  isSameCalendarDay,
+  parseLocalCalendarDate,
+} from '../../utils/bookingOverlap';
 
 interface Booking {
   _id: string;
@@ -28,6 +33,7 @@ interface Booking {
   date: Date;
   startTime: string;
   endTime: string;
+  duration?: number;
   location: string;
   needs: string;
   status: 'confirmed' | 'pending' | 'completed' | 'cancelled';
@@ -102,11 +108,13 @@ const CaregiverBookingsScreen: React.FC = () => {
   const navigation = useNavigation<CaregiverBookingsNavigationProp>();
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'expired' | 'completed'>('upcoming');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
   
   // Bookings state
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
+  const [expiredBookings, setExpiredBookings] = useState<Booking[]>([]);
   const [completedBookings, setCompletedBookings] = useState<Booking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   
@@ -123,7 +131,6 @@ const CaregiverBookingsScreen: React.FC = () => {
   
   // Contact modals state
   const [callModalVisible, setCallModalVisible] = useState(false);
-  const [messageModalVisible, setMessageModalVisible] = useState(false);
   const [selectedContactBooking, setSelectedContactBooking] = useState<Booking | null>(null);
 
   // Flat fee gate
@@ -152,9 +159,15 @@ const CaregiverBookingsScreen: React.FC = () => {
       // Fetch all bookings (confirmed and completed)
       const data = await ApiService.getCaregiverBookings();
       console.log('📥 Bookings from database:', data);
-      
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+
+      const isActiveBookingExpired = (booking: Booking) =>
+        isBookingExpired(
+          booking.date,
+          booking.endTime,
+          booking.status,
+          booking.startTime,
+          booking.duration,
+        );
       
       // Transform and separate bookings
       const transformedBookings: Booking[] = data.map((booking: any) => {
@@ -183,9 +196,10 @@ const CaregiverBookingsScreen: React.FC = () => {
           careReceiverName: careReceiver.name || 'Unknown',
           careReceiverImage: careReceiver.profileImage || 'https://i.pravatar.cc/150?img=1',
           serviceType: booking.serviceType,
-          date: new Date(booking.date),
+          date: parseLocalCalendarDate(booking.date),
           startTime: booking.startTime,
           endTime: booking.endTime,
+          duration: booking.duration,
           location: booking.location,
           needs: booking.needs || '',
           status: booking.status,
@@ -216,21 +230,36 @@ const CaregiverBookingsScreen: React.FC = () => {
         };
       });
       
-      // Separate upcoming (confirmed) and completed bookings
-      const upcoming = transformedBookings.filter(b => {
-        const bookingDate = new Date(b.date);
-        bookingDate.setHours(0, 0, 0, 0);
-        return (b.status === 'confirmed' || b.status === 'pending') && bookingDate >= today;
-      }).sort((a, b) => a.date.getTime() - b.date.getTime());
+      const activeStatuses = ['confirmed', 'pending'];
+
+      const expired = transformedBookings
+        .filter(
+          b => activeStatuses.includes(b.status) && isActiveBookingExpired(b),
+        )
+        .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+      const upcoming = transformedBookings
+        .filter(
+          b => activeStatuses.includes(b.status) && !isActiveBookingExpired(b),
+        )
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
       
       const completed = transformedBookings.filter(b => 
         b.status === 'completed'
       ).sort((a, b) => b.date.getTime() - a.date.getTime());
       
       setUpcomingBookings(upcoming);
+      setExpiredBookings(expired);
       setCompletedBookings(completed);
       
-      console.log('✅ Loaded bookings - Upcoming:', upcoming.length, 'Completed:', completed.length);
+      console.log(
+        '✅ Loaded bookings - Upcoming:',
+        upcoming.length,
+        'Expired:',
+        expired.length,
+        'Completed:',
+        completed.length,
+      );
     } catch (error: any) {
       console.error('❌ Error loading bookings:', error);
       Alert.alert('Error', error.response?.data?.message || 'Failed to load bookings');
@@ -251,7 +280,7 @@ const CaregiverBookingsScreen: React.FC = () => {
         careReceiverName: request.careReceiverId?.name || 'Unknown',
         careReceiverImage: request.careReceiverId?.profileImage || 'https://i.pravatar.cc/150?img=1',
         serviceType: request.serviceType,
-        requestedDate: new Date(request.requestedDate),
+        requestedDate: parseLocalCalendarDate(request.requestedDate),
         startTime: request.startTime,
         endTime: request.endTime,
         location: request.location,
@@ -418,53 +447,138 @@ const CaregiverBookingsScreen: React.FC = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
+  const goToToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedCalendarDate(today);
+  };
+
+  const clearCalendarSelection = () => {
+    setSelectedCalendarDate(null);
+  };
+
+  const handleSelectCalendarDay = (day: number) => {
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    date.setHours(0, 0, 0, 0);
+
+    if (selectedCalendarDate && isSameCalendarDay(selectedCalendarDate, date)) {
+      setSelectedCalendarDate(null);
+      return;
+    }
+
+    setSelectedCalendarDate(date);
+  };
+
+  const getDayBookingMarkers = (date: Date) => ({
+    hasUpcoming: upcomingBookings.some(booking =>
+      isSameCalendarDay(booking.date, date),
+    ),
+    hasExpired: expiredBookings.some(booking =>
+      isSameCalendarDay(booking.date, date),
+    ),
+    hasCompleted: completedBookings.some(booking =>
+      isSameCalendarDay(booking.date, date),
+    ),
+    hasPendingRequest: pendingRequests.some(request =>
+      isSameCalendarDay(request.requestedDate, date),
+    ),
+  });
+
+  const filterBookingsBySelectedDate = (bookings: Booking[]) => {
+    if (!selectedCalendarDate) {
+      return bookings;
+    }
+
+    return bookings.filter(booking =>
+      isSameCalendarDay(booking.date, selectedCalendarDate),
+    );
+  };
+
+  const displayedUpcomingBookings = filterBookingsBySelectedDate(upcomingBookings);
+  const displayedExpiredBookings = filterBookingsBySelectedDate(expiredBookings);
+  const displayedCompletedBookings = filterBookingsBySelectedDate(completedBookings);
+
   const renderCalendar = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const today = new Date();
-    
+    today.setHours(0, 0, 0, 0);
+
     const days = [];
-    
-    // Empty cells for days before month starts
-    for (let i = 0; i < firstDay; i++) {
-      days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
+
+    for (let i = 0; i < firstDay; i += 1) {
+      days.push(<View key={`empty-start-${i}`} style={styles.calendarDay} />);
     }
-    
-    // Days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
       const date = new Date(year, month, day);
-      const isToday = date.toDateString() === today.toDateString();
-      const hasBooking = upcomingBookings.some(
-        b => b.date.toDateString() === date.toDateString()
-      );
-      
+      date.setHours(0, 0, 0, 0);
+      const isToday = isSameCalendarDay(date, today);
+      const isSelected =
+        selectedCalendarDate !== null && isSameCalendarDay(date, selectedCalendarDate);
+      const {hasUpcoming, hasExpired, hasCompleted, hasPendingRequest} =
+        getDayBookingMarkers(date);
+      const hasAnyBooking =
+        hasUpcoming || hasExpired || hasCompleted || hasPendingRequest;
+
       days.push(
-        <View key={day} style={styles.calendarDay}>
-          <View style={[
-            styles.calendarDayContent,
-            isToday && styles.calendarDayToday,
-            hasBooking && styles.calendarDayBooked,
-          ]}>
-            <Text style={[
-              styles.calendarDayText,
-              isToday && styles.calendarDayTextToday,
-              hasBooking && styles.calendarDayTextBooked,
+        <TouchableOpacity
+          key={day}
+          style={styles.calendarDay}
+          activeOpacity={0.7}
+          onPress={() => handleSelectCalendarDay(day)}>
+          <View
+            style={[
+              styles.calendarDayContent,
+              isToday && !isSelected && styles.calendarDayToday,
+              hasAnyBooking && !isSelected && styles.calendarDayBooked,
+              isSelected && styles.calendarDaySelected,
             ]}>
+            <Text
+              style={[
+                styles.calendarDayText,
+                isToday && !isSelected && styles.calendarDayTextToday,
+                hasAnyBooking && !isSelected && styles.calendarDayTextBooked,
+                isSelected && styles.calendarDayTextSelected,
+              ]}>
               {day}
             </Text>
-            {hasBooking && <View style={styles.bookingDot} />}
+            {hasAnyBooking && (
+              <View style={styles.bookingDotsRow}>
+                {hasPendingRequest && <View style={styles.pendingDot} />}
+                {hasUpcoming && <View style={styles.bookingDot} />}
+                {hasExpired && <View style={styles.expiredDot} />}
+                {hasCompleted && <View style={styles.completedDot} />}
+              </View>
+            )}
           </View>
-        </View>
+        </TouchableOpacity>,
       );
     }
-    
+
+    const trailingEmpty = (7 - ((firstDay + daysInMonth) % 7)) % 7;
+    for (let i = 0; i < trailingEmpty; i += 1) {
+      days.push(<View key={`empty-end-${i}`} style={styles.calendarDay} />);
+    }
+
     return days;
   };
 
-  const renderBookingCard = (booking: Booking) => (
-    <View key={booking._id} style={styles.bookingCard}>
+  const renderBookingCard = (booking: Booking, options?: {expired?: boolean}) => (
+    <View
+      key={booking._id}
+      style={[styles.bookingCard, options?.expired && styles.bookingCardExpired]}>
+      {options?.expired && (
+        <View style={styles.expiredBanner}>
+          <Icon name="alert-circle" size={16} color="#dc2626" />
+          <Text style={styles.expiredBannerText}>
+            Overdue — booking time has passed without completion
+          </Text>
+        </View>
+      )}
       <View style={styles.bookingHeader}>
         <View style={styles.dateBox}>
           <Text style={styles.dateMonth}>
@@ -558,38 +672,37 @@ const CaregiverBookingsScreen: React.FC = () => {
             setSelectedContactBooking(booking);
             setCallModalVisible(true);
           }}>
-          <Icon name="phone" size={16} color="#8b5cf6" />
-          <Text style={styles.actionButtonText}>Call</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => {
-            setSelectedContactBooking(booking);
-            setMessageModalVisible(true);
-          }}>
-          <Icon name="mail" size={16} color="#8b5cf6" />
-          <Text style={styles.actionButtonText}>Message</Text>
+          <Icon name="phone" size={12} color="#8b5cf6" />
+          <Text style={styles.actionButtonText} numberOfLines={1}>
+            Call
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => setSelectedBooking(booking)}>
-          <Icon name="user" size={16} color="#8b5cf6" />
-          <Text style={styles.actionButtonText}>Details</Text>
+          <Icon name="user" size={12} color="#8b5cf6" />
+          <Text style={styles.actionButtonText} numberOfLines={1}>
+            Details
+          </Text>
         </TouchableOpacity>
         {booking.status === 'pending' && (
           <TouchableOpacity
             style={styles.approveBookingButton}
             onPress={() => handleApproveBooking(booking)}>
-            <Icon name="check" size={16} color="#ffffff" />
-            <Text style={styles.approveBookingButtonText}>Approve</Text>
+            <Icon name="check" size={12} color="#ffffff" />
+            <Text style={styles.approveBookingButtonText} numberOfLines={1}>
+              Approve
+            </Text>
           </TouchableOpacity>
         )}
         {booking.status === 'confirmed' && (
           <TouchableOpacity
             style={styles.completeBookingButton}
             onPress={() => handleMarkBookingCompleted(booking)}>
-            <Icon name="check-square" size={16} color="#ffffff" />
-            <Text style={styles.completeBookingButtonText}>Mark Completed</Text>
+            <Icon name="check-square" size={12} color="#ffffff" />
+            <Text style={styles.completeBookingButtonText} numberOfLines={1}>
+              Complete
+            </Text>
           </TouchableOpacity>
         )}
         {booking.remainingPaymentStatus !== 'completed_physical' && (
@@ -620,74 +733,18 @@ const CaregiverBookingsScreen: React.FC = () => {
                 ],
               )
             }>
-            <Icon name="check-circle" size={16} color="#ffffff" />
-            <Text style={styles.markPhysicalPaidButtonText}>Mark Physical Paid</Text>
+            <Icon name="check-circle" size={12} color="#ffffff" />
+            <Text style={styles.markPhysicalPaidButtonText} numberOfLines={1}>
+              Paid
+            </Text>
           </TouchableOpacity>
         )}
       </View>
     </View>
   );
 
-  const renderCompletedBookingsTable = () => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      nestedScrollEnabled={true}
-      style={styles.tableWrapper}>
-      <View style={styles.tableContainer}>
-        <View style={styles.tableHeader}>
-          <Text style={[styles.tableHeaderText, styles.tableDateColumn]}>Date</Text>
-          <Text style={[styles.tableHeaderText, styles.tableClientColumn]}>Client</Text>
-          <Text style={[styles.tableHeaderText, styles.tableServiceColumn]}>Service</Text>
-          <Text style={[styles.tableHeaderText, styles.tableTimeColumn]}>Time</Text>
-          <Text style={[styles.tableHeaderText, styles.tableActionColumn]}>Action</Text>
-        </View>
-        {completedBookings.map(booking => (
-          <View key={booking._id} style={styles.tableRow}>
-            <View style={styles.tableDateColumn}>
-              <Text style={styles.tableDateText}>
-                {booking.date.toLocaleDateString('default', {month: 'short', day: 'numeric'})}
-              </Text>
-              <Text style={styles.tableYearText}>{booking.date.getFullYear()}</Text>
-            </View>
-            <View style={styles.tableClientColumn}>
-              <View style={styles.tableClientContent}>
-                <Image source={{uri: booking.careReceiverImage}} style={styles.tableAvatar} />
-                <Text style={styles.tableClientText} numberOfLines={1}>
-                  {booking.careReceiverName}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.tableServiceColumn}>
-              <Text style={styles.tableServiceText}>{booking.serviceType}</Text>
-            </View>
-            <View style={styles.tableTimeColumn}>
-              <View style={styles.tableTimeContent}>
-                <Icon name="clock" size={12} color="#6b7280" />
-                <Text style={styles.tableTimeText}>
-                  {booking.startTime}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.tableActionColumn}>
-              <TouchableOpacity
-                style={styles.tableActionButton}
-                onPress={() => setSelectedBooking(booking)}>
-                <Icon name="eye" size={16} color="#8b5cf6" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
-      </View>
-    </ScrollView>
-  );
-
   const handleCall = (phoneNumber: string) => {
     Linking.openURL(`tel:${phoneNumber}`);
-  };
-
-  const handleEmail = (email: string) => {
-    Linking.openURL(`mailto:${email}`);
   };
 
   return (
@@ -724,9 +781,14 @@ const CaregiverBookingsScreen: React.FC = () => {
             <TouchableOpacity onPress={goToPreviousMonth} style={styles.calendarNavButton}>
               <Icon name="chevron-left" size={20} color="#8b5cf6" />
             </TouchableOpacity>
-            <Text style={styles.calendarMonthText}>
-              {currentDate.toLocaleDateString('default', {month: 'long', year: 'numeric'})}
-            </Text>
+            <View style={styles.calendarHeaderCenter}>
+              <Text style={styles.calendarMonthText}>
+                {currentDate.toLocaleDateString('default', {month: 'long', year: 'numeric'})}
+              </Text>
+              <TouchableOpacity onPress={goToToday} style={styles.calendarTodayButton}>
+                <Text style={styles.calendarTodayText}>Today</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity onPress={goToNextMonth} style={styles.calendarNavButton}>
               <Icon name="chevron-right" size={20} color="#8b5cf6" />
             </TouchableOpacity>
@@ -745,9 +807,38 @@ const CaregiverBookingsScreen: React.FC = () => {
           <View style={styles.calendarLegend}>
             <View style={styles.legendItem}>
               <View style={styles.legendDotPurple} />
-              <Text style={styles.legendText}>Confirmed Bookings</Text>
+              <Text style={styles.legendText}>Upcoming</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={styles.legendDotRed} />
+              <Text style={styles.legendText}>Expired</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={styles.legendDotGreen} />
+              <Text style={styles.legendText}>Completed</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={styles.legendDotAmber} />
+              <Text style={styles.legendText}>Pending</Text>
             </View>
           </View>
+
+          {selectedCalendarDate && (
+            <View style={styles.calendarFilterBanner}>
+              <Text style={styles.calendarFilterText}>
+                Showing {activeTab} bookings for{' '}
+                {selectedCalendarDate.toLocaleDateString('default', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </Text>
+              <TouchableOpacity onPress={clearCalendarSelection} style={styles.calendarFilterClear}>
+                <Icon name="x" size={14} color="#8b5cf6" />
+                <Text style={styles.calendarFilterClearText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Flat Fee Due Banner */}
@@ -865,24 +956,35 @@ const CaregiverBookingsScreen: React.FC = () => {
         ) : null}
 
         {/* Tabs */}
-        <View style={styles.tabsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsScrollContent}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'upcoming' && styles.activeTab]}
             onPress={() => setActiveTab('upcoming')}>
-            <Icon name="calendar" size={18} color={activeTab === 'upcoming' ? '#8b5cf6' : '#6b7280'} />
+            <Icon name="calendar" size={14} color={activeTab === 'upcoming' ? '#8b5cf6' : '#6b7280'} />
             <Text style={[styles.tabText, activeTab === 'upcoming' && styles.activeTabText]}>
               Upcoming ({upcomingBookings.length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.tab, activeTab === 'expired' && styles.activeTab]}
+            onPress={() => setActiveTab('expired')}>
+            <Icon name="alert-circle" size={14} color={activeTab === 'expired' ? '#8b5cf6' : '#6b7280'} />
+            <Text style={[styles.tabText, activeTab === 'expired' && styles.activeTabText]}>
+              Expired ({expiredBookings.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
             onPress={() => setActiveTab('completed')}>
-            <Icon name="check-circle" size={18} color={activeTab === 'completed' ? '#8b5cf6' : '#6b7280'} />
+            <Icon name="check-circle" size={14} color={activeTab === 'completed' ? '#8b5cf6' : '#6b7280'} />
             <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
               Completed ({completedBookings.length})
             </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
         {/* Bookings List Content */}
         <View style={styles.bookingsListContainer}>
@@ -892,23 +994,53 @@ const CaregiverBookingsScreen: React.FC = () => {
               <Text style={styles.loadingText}>Loading bookings...</Text>
             </View>
           ) : activeTab === 'upcoming' ? (
-            upcomingBookings.length > 0 ? (
-              upcomingBookings.map(renderBookingCard)
+            displayedUpcomingBookings.length > 0 ? (
+              displayedUpcomingBookings.map(booking => renderBookingCard(booking))
             ) : (
               <View style={styles.emptyState}>
                 <Icon name="calendar" size={64} color="#d1d5db" />
-                <Text style={styles.emptyStateTitle}>No Upcoming Bookings</Text>
-                <Text style={styles.emptyStateText}>You don't have any scheduled appointments</Text>
+                <Text style={styles.emptyStateTitle}>
+                  {selectedCalendarDate ? 'No Upcoming Bookings on This Date' : 'No Upcoming Bookings'}
+                </Text>
+                <Text style={styles.emptyStateText}>
+                  {selectedCalendarDate
+                    ? 'Try another date or clear the calendar filter'
+                    : "You don't have any scheduled appointments"}
+                </Text>
+              </View>
+            )
+          ) : activeTab === 'expired' ? (
+            displayedExpiredBookings.length > 0 ? (
+              displayedExpiredBookings.map(booking =>
+                renderBookingCard(booking, {expired: true}),
+              )
+            ) : (
+              <View style={styles.emptyState}>
+                <Icon name="alert-circle" size={64} color="#d1d5db" />
+                <Text style={styles.emptyStateTitle}>
+                  {selectedCalendarDate ? 'No Expired Bookings on This Date' : 'No Expired Bookings'}
+                </Text>
+                <Text style={styles.emptyStateText}>
+                  {selectedCalendarDate
+                    ? 'Try another date or clear the calendar filter'
+                    : 'Overdue bookings that were not completed will appear here'}
+                </Text>
               </View>
             )
           ) : (
-            completedBookings.length > 0 ? (
-              renderCompletedBookingsTable()
+            displayedCompletedBookings.length > 0 ? (
+              displayedCompletedBookings.map(booking => renderBookingCard(booking))
             ) : (
               <View style={styles.emptyState}>
                 <Icon name="check-circle" size={64} color="#d1d5db" />
-                <Text style={styles.emptyStateTitle}>No Completed Bookings</Text>
-                <Text style={styles.emptyStateText}>Your completed appointments will appear here</Text>
+                <Text style={styles.emptyStateTitle}>
+                  {selectedCalendarDate ? 'No Completed Bookings on This Date' : 'No Completed Bookings'}
+                </Text>
+                <Text style={styles.emptyStateText}>
+                  {selectedCalendarDate
+                    ? 'Try another date or clear the calendar filter'
+                    : 'Your completed appointments will appear here'}
+                </Text>
               </View>
             )
           )}
@@ -1123,85 +1255,6 @@ const CaregiverBookingsScreen: React.FC = () => {
                       {selectedContactBooking.careReceiverDetails.emergencyContact.phone || 'Not provided'}
                     </Text>
                   </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Message Modal */}
-      <Modal
-        visible={messageModalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setMessageModalVisible(false)}>
-        <View style={styles.contactModalOverlay}>
-          <View style={styles.contactModalContent}>
-            <View style={styles.contactModalHeader}>
-              <View style={styles.contactIconCircle}>
-                <Icon name="mail" size={32} color="#8b5cf6" />
-              </View>
-              <Text style={styles.contactModalTitle}>Send Message</Text>
-              <TouchableOpacity 
-                style={styles.contactModalClose}
-                onPress={() => setMessageModalVisible(false)}>
-                <Icon name="x" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            
-            {selectedContactBooking && (
-              <>
-                <View style={styles.contactDetailsBox}>
-                  <Image
-                    source={{uri: selectedContactBooking.careReceiverImage}}
-                    style={styles.contactModalImage}
-                  />
-                  <Text style={styles.contactModalName}>
-                    {selectedContactBooking.careReceiverName}
-                  </Text>
-                  <Text style={styles.contactModalService}>
-                    {selectedContactBooking.serviceType}
-                  </Text>
-                  <Text style={styles.contactModalDate}>
-                    {selectedContactBooking.date.toLocaleDateString('default', { 
-                      month: 'long', 
-                      day: 'numeric',
-                      year: 'numeric'
-                    })} • {selectedContactBooking.startTime} - {selectedContactBooking.endTime}
-                  </Text>
-                </View>
-
-                <View style={styles.contactActionBox}>
-                  <Text style={styles.contactLabel}>Email Address</Text>
-                  <Text style={styles.contactValue}>{selectedContactBooking.email}</Text>
-                  
-                  <TouchableOpacity
-                    style={styles.primaryActionButton}
-                    onPress={() => {
-                      setMessageModalVisible(false);
-                      handleEmail(selectedContactBooking.email);
-                    }}>
-                    <Icon name="mail" size={20} color="#fff" />
-                    <Text style={styles.primaryActionText}>Send Email</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.primaryActionButtonGreen}
-                    onPress={() => {
-                      setMessageModalVisible(false);
-                      Linking.openURL(`sms:${selectedContactBooking.phoneNumber}`);
-                    }}>
-                    <Icon name="message-circle" size={20} color="#fff" />
-                    <Text style={styles.primaryActionText}>Send SMS</Text>
-                  </TouchableOpacity>
-
-                  <View style={styles.messageInfoBox}>
-                    <Icon name="info" size={16} color="#6b7280" />
-                    <Text style={styles.messageInfoText}>
-                      Booking on {selectedContactBooking.date.toLocaleDateString('default', {month: 'short', day: 'numeric'})} at {selectedContactBooking.startTime}
-                    </Text>
-                  </View>
                 </View>
               </>
             )}
@@ -1537,21 +1590,28 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     gap: 12,
   },
+  tabsScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 6,
+    gap: 8,
+    backgroundColor: '#fff',
+  },
   tab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     backgroundColor: '#f9fafb',
   },
   activeTab: {
     backgroundColor: '#ede9fe',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#6b7280',
   },
@@ -1570,6 +1630,29 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+  },
+  bookingCardExpired: {
+    borderColor: '#fecaca',
+    backgroundColor: '#fffafa',
+  },
+  expiredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  expiredBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#dc2626',
+    lineHeight: 16,
   },
   bookingHeader: {
     flexDirection: 'row',
@@ -1681,25 +1764,29 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 8,
-    paddingTop: 12,
+    flexWrap: 'nowrap',
+    gap: 4,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
   },
   actionButton: {
     flex: 1,
-    flexDirection: 'row',
+    minWidth: 0,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 6,
     backgroundColor: '#f3f4f6',
   },
   actionButtonText: {
-    fontSize: 13,
+    fontSize: 9,
     fontWeight: '600',
     color: '#8b5cf6',
+    textAlign: 'center',
   },
   paymentSplitRow: {
     marginBottom: 12,
@@ -1745,49 +1832,58 @@ const styles = StyleSheet.create({
     color: '#92400e',
   },
   markPhysicalPaidButton: {
-    flex: 1.2,
-    flexDirection: 'row',
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 6,
     backgroundColor: '#0f766e',
   },
   markPhysicalPaidButtonText: {
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: '700',
     color: '#ffffff',
+    textAlign: 'center',
   },
   completeBookingButton: {
-    flex: 1.2,
-    flexDirection: 'row',
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 6,
     backgroundColor: '#2563eb',
   },
   completeBookingButtonText: {
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: '700',
     color: '#ffffff',
+    textAlign: 'center',
   },
   approveBookingButton: {
     flex: 1,
-    flexDirection: 'row',
+    minWidth: 0,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 6,
     backgroundColor: '#16a34a',
   },
   approveBookingButtonText: {
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: '700',
     color: '#ffffff',
+    textAlign: 'center',
   },
   emptyState: {
     alignItems: 'center',
@@ -1977,6 +2073,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
+  calendarHeaderCenter: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  calendarTodayButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#ede9fe',
+  },
+  calendarTodayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8b5cf6',
+  },
   calendarNavButton: {
     width: 36,
     height: 36,
@@ -2025,6 +2137,9 @@ const styles = StyleSheet.create({
   calendarDayBooked: {
     backgroundColor: '#ede9fe',
   },
+  calendarDaySelected: {
+    backgroundColor: '#8b5cf6',
+  },
   calendarDayText: {
     fontSize: 14,
     color: '#374151',
@@ -2037,18 +2152,46 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#8b5cf6',
   },
+  calendarDayTextSelected: {
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  bookingDotsRow: {
+    position: 'absolute',
+    bottom: 4,
+    flexDirection: 'row',
+    gap: 3,
+  },
   bookingDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#8b5cf6',
-    position: 'absolute',
-    bottom: 4,
+  },
+  pendingDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#f59e0b',
+  },
+  expiredDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#dc2626',
+  },
+  completedDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#10b981',
   },
   calendarLegend: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
@@ -2070,9 +2213,58 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#8b5cf6',
   },
+  legendDotGreen: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
+  legendDotRed: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#dc2626',
+  },
+  legendDotAmber: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#f59e0b',
+  },
   legendText: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  calendarFilterBanner: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  calendarFilterText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#5b21b6',
+    fontWeight: '500',
+  },
+  calendarFilterClear: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  calendarFilterClearText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8b5cf6',
   },
   contactModalOverlay: {
     flex: 1,
@@ -2173,17 +2365,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
-  primaryActionButtonGreen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#10b981',
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginBottom: 8,
-    marginTop: 12,
-  },
   primaryActionText: {
     fontSize: 16,
     fontWeight: '600',
@@ -2227,20 +2408,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
     marginBottom: 12,
-  },
-  messageInfoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#f9fafb',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  messageInfoText: {
-    fontSize: 13,
-    color: '#6b7280',
-    flex: 1,
   },
   loadingContainer: {
     backgroundColor: '#fff',
@@ -2489,107 +2656,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
-  },
-  tableWrapper: {
-    flex: 1,
-  },
-  tableContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    minWidth: 600,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f9fafb',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: '#e5e7eb',
-  },
-  tableHeaderText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6b7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-    alignItems: 'center',
-  },
-  tableDateColumn: {
-    width: 80,
-  },
-  tableDateText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  tableYearText: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginTop: 2,
-  },
-  tableClientColumn: {
-    width: 160,
-    paddingHorizontal: 8,
-  },
-  tableClientContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  tableAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  tableClientText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
-  tableServiceColumn: {
-    width: 140,
-    paddingHorizontal: 8,
-  },
-  tableServiceText: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  tableTimeColumn: {
-    width: 80,
-    paddingHorizontal: 8,
-  },
-  tableTimeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  tableTimeText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  tableActionColumn: {
-    width: 60,
-    alignItems: 'center',
-  },
-  tableActionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#ede9fe',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   requestDetailBox: {
     gap: 16,

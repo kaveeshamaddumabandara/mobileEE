@@ -17,6 +17,10 @@ import Icon from 'react-native-vector-icons/Feather';
 import SideMenu from '../../components/SideMenu';
 import api from '../../services/api';
 import {
+  isBookingExpired,
+  parseLocalCalendarDate,
+} from '../../utils/bookingOverlap';
+import {
   WelcomeCard,
   StatCard,
   UpcomingCard,
@@ -58,32 +62,53 @@ const CaregiverDashboardScreen: React.FC<CaregiverDashboardScreenProps> = ({
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setFeedbackPage(0);
+      setSchedulePage(0);
       
-      // Fetch dashboard stats
       const statsResponse = await api.getCaregiverDashboardStats();
-      console.log('Stats response:', statsResponse);
       setDashboardStats(statsResponse || { earnings: 0, clients: 0, hours: 0, rating: 0, totalReviews: 0 });
 
-      // Fetch feedback
       const feedbackData = await api.getCaregiverFeedback();
       setAllFeedback(Array.isArray(feedbackData) ? feedbackData : []);
       
-      // Fetch upcoming bookings as schedule
       const bookings = await api.getCaregiverBookings();
       if (Array.isArray(bookings)) {
         const upcomingBookings = bookings
-          .filter((booking: any) => 
-            booking.status === 'confirmed' || booking.status === 'pending'
-          )
-          .map((booking: any) => ({
-            id: booking._id,
-            client: booking.careReceiverId?.name || 'Unknown',
-            service: booking.serviceType,
-            time: new Date(booking.date).toLocaleDateString() + ', ' + booking.startTime,
-            duration: `${booking.duration || 2} hours`,
-            status: booking.status,
-          }))
-          .slice(0, 10);
+          .filter((booking: any) => {
+            const status = booking.status;
+            if (status !== 'confirmed' && status !== 'pending') {
+              return false;
+            }
+
+            return !isBookingExpired(
+              booking.date,
+              booking.endTime,
+              booking.status,
+              booking.startTime,
+              booking.duration,
+            );
+          })
+          .sort((a: any, b: any) => {
+            const dateA = parseLocalCalendarDate(a.date)?.getTime() ?? 0;
+            const dateB = parseLocalCalendarDate(b.date)?.getTime() ?? 0;
+            if (dateA !== dateB) {
+              return dateA - dateB;
+            }
+            return String(a.startTime || '').localeCompare(String(b.startTime || ''));
+          })
+          .map((booking: any) => {
+            const bookingDate = parseLocalCalendarDate(booking.date);
+            return {
+              id: booking._id,
+              client: booking.careReceiverId?.name || 'Unknown',
+              service: booking.serviceType,
+              time: bookingDate
+                ? `${bookingDate.toLocaleDateString()}, ${booking.startTime}`
+                : `${booking.startTime}`,
+              duration: `${booking.duration || 2} hours`,
+              status: booking.status,
+            };
+          });
         setAllSchedule(upcomingBookings);
       } else {
         setAllSchedule([]);

@@ -32,9 +32,6 @@ const AboutUsScreen: React.FC<AboutUsScreenProps> = ({navigation}) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         <View style={styles.heroCard}>
-          <View style={styles.heroIconWrap}>
-            <Icon name="heart" size={28} color="#2563eb" />
-          </View>
           <Text style={styles.heroTitle}>CareConnect</Text>
           <Text style={styles.heroSubtitle}>
             Connecting families with trusted caregivers for safer, kinder home care.

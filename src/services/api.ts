@@ -7,13 +7,15 @@ import {
   User,
   Caregiver,
   CareReceiver,
+  PendingContactChange,
   Payment,
   Feedback,
   ApiError,
 } from '../types';
+import {formatLocalDateParam} from '../utils/bookingOverlap';
 
-// Update this to your backend URL
-// For iOS Simulator use localhost, for Android Emulator use 10.0.2.2, for physical device use your computer's IP
+// Production backend (Vercel)
+//const API_BASE_URL = 'https://eldereasebackend.vercel.app/api';
 const API_BASE_URL = 'http://localhost:3001/api';
 
 const mapCareReceiverProfile = (careReceiver: any): CareReceiver => {
@@ -43,6 +45,47 @@ const mapCareReceiverProfile = (careReceiver: any): CareReceiver => {
     city: userData.address?.city || '',
     district: userData.address?.state || '',
     dateOfBirth: userData.dateOfBirth,
+  };
+};
+
+const mapCaregiverProfile = (
+  caregiver: any,
+  existingUser?: Partial<User> | null,
+): Caregiver => {
+  const userData = caregiver.userId;
+
+  if (!userData) {
+    throw new Error('User data not populated in caregiver profile');
+  }
+
+  return {
+    ...(existingUser || {}),
+    _id: userData._id,
+    role: 'caregiver',
+    name: userData.name,
+    email: userData.email,
+    phone: userData.phone,
+    profileImage: userData.profileImage,
+    address: userData.address,
+    isVerified: existingUser?.isVerified ?? userData.isVerified,
+    isActive: existingUser?.isActive ?? userData.isActive,
+    registrationFeePaid:
+      caregiver.registrationFeePaid ?? existingUser?.registrationFeePaid,
+    qualification: caregiver.qualification,
+    experience: caregiver.experience,
+    specialization: caregiver.specialization,
+    skills: caregiver.skills,
+    languages: caregiver.languages,
+    hourlyRate: caregiver.hourlyRate,
+    bio: caregiver.bio,
+    rating: caregiver.rating,
+    totalReviews: caregiver.totalReviews ?? 0,
+    availability: caregiver.status === 'available',
+    availabilityType: caregiver.availabilityType,
+    certificationsText: caregiver.certificationsText,
+    workStartTime: caregiver.workStartTime,
+    workEndTime: caregiver.workEndTime,
+    hasTransportation: caregiver.hasTransportation,
   };
 };
 
@@ -146,13 +189,12 @@ class ApiService {
     
     if (parsedUser?.role === 'caregiver') {
       const response = await this.api.get('/caregiver/profile');
-      // Backend returns {status, data: {caregiver}} where caregiver has populated userId
       const caregiver = response.data.data.caregiver;
+      const pendingContactChange = response.data.data.pendingContactChange;
       return {
-        ...caregiver.userId,
-        ...caregiver,
-        _id: caregiver.userId._id,
-      };
+        ...mapCaregiverProfile(caregiver, parsedUser),
+        pendingContactChange,
+      } as Caregiver;
     }
     
     if (parsedUser?.role === 'carereceiver') {
@@ -206,10 +248,23 @@ class ApiService {
   ): Promise<{status: string; message: string}> {
     const formData = new FormData();
     files.forEach((file, index) => {
+      const fileName = file.name || `document_${index}`;
+      const lowerName = fileName.toLowerCase();
+      const isPdf =
+        file.type === 'application/pdf' || lowerName.endsWith('.pdf');
+      const mimeType = isPdf
+        ? 'application/pdf'
+        : file.type || 'image/jpeg';
+      const uploadName = isPdf
+        ? lowerName.endsWith('.pdf')
+          ? fileName
+          : `${fileName}.pdf`
+        : fileName;
+
       formData.append('qualificationDocs', {
         uri: file.uri,
-        name: file.name || `document_${index}.jpg`,
-        type: file.type || 'image/jpeg',
+        name: uploadName,
+        type: mimeType,
       } as any);
     });
     const response = await this.api.post('/caregiver/documents', formData, {
@@ -240,17 +295,22 @@ class ApiService {
   }
 
   async updateCaregiverProfile(data: Partial<Caregiver>): Promise<Caregiver> {
+    const storedUser = await AsyncStorage.getItem('user');
+    const parsedUser = storedUser ? JSON.parse(storedUser) : null;
     const response = await this.api.put(
       '/caregiver/profile',
       data,
     );
-    // Backend returns {status, message, data: {caregiver}}
     const caregiver = response.data.data.caregiver;
+    const pendingContactChange: PendingContactChange | null =
+      response.data.data.pendingContactChange;
+    const contactChangeSubmitted = Boolean(
+      response.data.data.contactChangeSubmitted,
+    );
     return {
-      ...caregiver.userId,
-      ...caregiver,
-      _id: caregiver.userId._id,
-      role: 'caregiver', // Ensure role is always caregiver
+      ...mapCaregiverProfile(caregiver, parsedUser),
+      pendingContactChange,
+      contactChangeSubmitted,
     };
   }
 
@@ -450,21 +510,6 @@ class ApiService {
     return response.data.data;
   }
 
-  async getCaregiverBookedSlots(caregiverId: string, date: Date): Promise<
-    Array<{
-      startTime: string;
-      endTime: string;
-      duration?: number;
-      status?: string;
-    }>
-  > {
-    const dateParam = date.toISOString().split('T')[0];
-    const response = await this.api.get(
-      `/carereceiver/caregivers/${caregiverId}/booked-slots?date=${dateParam}`,
-    );
-    return response.data.data;
-  }
-
   async createBookingPaymentIntent(bookingData: {
     caregiverId: string;
     serviceType: string;
@@ -482,7 +527,10 @@ class ApiService {
     advanceAmount: number;
     remainingAmount: number;
   }> {
-    const response = await this.api.post('/carereceiver/bookings/payment-intent', bookingData);
+    const response = await this.api.post('/carereceiver/bookings/payment-intent', {
+      ...bookingData,
+      date: formatLocalDateParam(bookingData.date),
+    });
     return response.data.data;
   }
 
@@ -499,7 +547,10 @@ class ApiService {
     totalAmount?: number;
     paymentIntentId: string;
   }): Promise<any> {
-    const response = await this.api.post('/carereceiver/bookings', bookingData);
+    const response = await this.api.post('/carereceiver/bookings', {
+      ...bookingData,
+      date: formatLocalDateParam(bookingData.date),
+    });
     return response.data;
   }
 
@@ -508,6 +559,25 @@ class ApiService {
     const url = status ? `/carereceiver/my-bookings?status=${status}` : '/carereceiver/my-bookings';
     const response = await this.api.get(url);
     return response.data.data;
+  }
+
+  async getCaregiverBookedSlots(
+    caregiverId: string,
+    date: Date,
+  ): Promise<
+    {
+      startTime: string;
+      endTime: string;
+      duration?: number;
+      status?: string;
+    }[]
+  > {
+    const dateParam = formatLocalDateParam(date);
+    const response = await this.api.get(
+      `/carereceiver/caregivers/${caregiverId}/booked-slots`,
+      {params: {date: dateParam}},
+    );
+    return response.data.data || [];
   }
 
   async markRemainingBookingPaymentByCaregiver(bookingId: string): Promise<any> {
@@ -678,7 +748,7 @@ class ApiService {
     subject: string;
     message: string;
   }): Promise<{status: string; message: string}> {
-    const response = await this.api.post('/contact', data);
+    const response = await this.api.post('/contact/send', data);
     return response.data;
   }
 }

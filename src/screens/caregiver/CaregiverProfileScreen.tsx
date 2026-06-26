@@ -17,7 +17,7 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {CaregiverTabParamList} from '../../navigation/types';
 import {useAuth} from '../../context/AuthContext';
 import ApiService from '../../services/api';
-import {Caregiver} from '../../types';
+import {Caregiver, PendingContactChange} from '../../types';
 import SideMenu from '../../components/SideMenu';
 import {getWorkingHoursLabel} from '../../utils/bookingOverlap';
 
@@ -25,6 +25,22 @@ type CaregiverProfileScreenNavigationProp = NativeStackNavigationProp<
   CaregiverTabParamList,
   'Profile'
 >;
+
+const formatAddressValue = (userAddress: unknown): string => {
+  if (typeof userAddress === 'object' && userAddress !== null) {
+    const addrObj = userAddress as {
+      street?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+    };
+    return [addrObj.street, addrObj.city, addrObj.state, addrObj.zipCode]
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  return typeof userAddress === 'string' ? userAddress : '';
+};
 
 const CaregiverProfileScreen: React.FC = () => {
   const navigation = useNavigation<CaregiverProfileScreenNavigationProp>();
@@ -51,10 +67,12 @@ const CaregiverProfileScreen: React.FC = () => {
   const [workEndTime, setWorkEndTime] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [pendingContactChange, setPendingContactChange] =
+    useState<PendingContactChange | null>(null);
 
   const loadProfile = React.useCallback(async () => {
     try {
-      const data = await ApiService.getProfile() as Caregiver;
+      const data = (await ApiService.getProfile()) as Caregiver;
       setProfile({
         name: data.name,
         email: data.email,
@@ -63,34 +81,23 @@ const CaregiverProfileScreen: React.FC = () => {
         hourlyRate: data.hourlyRate,
         bio: data.bio,
         skills: data.skills || [],
+        rating: data.rating,
+        totalReviews: data.totalReviews ?? 0,
       });
-      // Load additional fields from user data
       setSpecializations(data.specialization || []);
       setLanguages(data.languages || []);
       setEducation(data.qualification || '');
       setCertifications(data.certificationsText || '');
-      // Format address if it's an object
-      const userAddress = user?.address || data.address;
-      if (typeof userAddress === 'object' && userAddress !== null) {
-        const addrObj = userAddress as any;
-        const addressParts = [
-          addrObj.street,
-          addrObj.city,
-          addrObj.state,
-          addrObj.zipCode
-        ].filter(Boolean);
-        setAddress(addressParts.join(', '));
-      } else {
-        setAddress(userAddress || '');
-      }
+      setAddress(formatAddressValue(data.address));
       setAvailability(data.availabilityType || '');
       setWorkStartTime(data.workStartTime || '');
       setWorkEndTime(data.workEndTime || '');
       setProfileImage(data.profileImage || user?.profileImage || null);
+      setPendingContactChange(data.pendingContactChange || null);
     } catch (error) {
       console.error('Error loading profile:', error);
     }
-  }, [user?.address, user?.profileImage]);
+  }, [user?.profileImage]);
 
   useEffect(() => {
     loadProfile();
@@ -220,6 +227,7 @@ const CaregiverProfileScreen: React.FC = () => {
         certificationsText: certifications,
         workStartTime: workStartTime.trim(),
         workEndTime: workEndTime.trim(),
+        address: address.trim(),
       };
 
       // Include profile image if it exists
@@ -235,19 +243,31 @@ const CaregiverProfileScreen: React.FC = () => {
       }
 
       const updatedUser = await ApiService.updateCaregiverProfile(updateData);
-      
-      // Update user context with new profile image
-      if (profileImage) {
-        updateUser({...updatedUser, profileImage: profileImage});
-      } else {
-        updateUser(updatedUser);
-      }
+
+      updateUser({
+        ...(user || {}),
+        ...updatedUser,
+        role: 'caregiver',
+        phone: updatedUser.phone,
+        address: updatedUser.address,
+        profileImage: profileImage || updatedUser.profileImage,
+      });
+
+      setProfile(prev => ({
+        ...prev,
+        phone: updatedUser.phone || '',
+      }));
+      setAddress(formatAddressValue(updatedUser.address));
+      setPendingContactChange(updatedUser.pendingContactChange || null);
       
       setIsEditing(false);
-      Alert.alert('Success', 'Profile updated successfully');
-      
-      // Keep the current profileImage in state instead of reloading
-      // This ensures the uploaded image stays visible
+      Alert.alert(
+        'Success',
+        updatedUser.contactChangeSubmitted
+          ? 'Profile saved. Phone or address changes were submitted for admin approval. Your current contact details remain active until approved.'
+          : 'Profile updated successfully',
+      );
+      await loadProfile();
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to update profile');
     } finally {
@@ -300,6 +320,30 @@ const CaregiverProfileScreen: React.FC = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {pendingContactChange && (
+          <View style={styles.pendingBanner}>
+            <Icon name="clock" size={18} color="#b45309" />
+            <View style={styles.pendingBannerContent}>
+              <Text style={styles.pendingBannerTitle}>
+                Contact update awaiting admin approval
+              </Text>
+              {pendingContactChange.pendingPhone ? (
+                <Text style={styles.pendingBannerText}>
+                  Requested phone: {pendingContactChange.pendingPhone}
+                </Text>
+              ) : null}
+              {pendingContactChange.pendingAddressLabel ? (
+                <Text style={styles.pendingBannerText}>
+                  Requested address: {pendingContactChange.pendingAddressLabel}
+                </Text>
+              ) : null}
+              <Text style={styles.pendingBannerHint}>
+                Your current phone and address stay active until the admin approves.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Profile Header Card */}
         <View style={styles.profileCard}>
           <View style={styles.profileContent}>
@@ -325,8 +369,15 @@ const CaregiverProfileScreen: React.FC = () => {
               <Text style={styles.profileEmail}>{profile.email}</Text>
               <View style={styles.ratingContainer}>
                 <Icon name="star" size={16} color="#fbbf24" />
-                <Text style={styles.ratingText}>4.9</Text>
-                <Text style={styles.ratingCount}>(80 reviews)</Text>
+                <Text style={styles.ratingText}>
+                  {(profile.rating ?? 0) > 0
+                    ? profile.rating!.toFixed(1)
+                    : 'N/A'}
+                </Text>
+                <Text style={styles.ratingCount}>
+                  ({profile.totalReviews ?? 0}{' '}
+                  {(profile.totalReviews ?? 0) === 1 ? 'review' : 'reviews'})
+                </Text>
               </View>
             </View>
           </View>
@@ -381,12 +432,20 @@ const CaregiverProfileScreen: React.FC = () => {
             )}
           </View>
 
-          {address && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Address</Text>
-              <Text style={styles.infoValue}>{address}</Text>
-            </View>
-          )}
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Address</Text>
+            {isEditing ? (
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Enter your address"
+                multiline
+              />
+            ) : (
+              <Text style={styles.infoValue}>{address || 'Not provided'}</Text>
+            )}
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -858,6 +917,36 @@ const styles = StyleSheet.create({
   helperText: {
     fontSize: 12,
     color: '#94a3b8',
+    marginTop: 4,
+  },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  pendingBannerContent: {
+    flex: 1,
+  },
+  pendingBannerTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#92400e',
+    marginBottom: 6,
+  },
+  pendingBannerText: {
+    fontSize: 14,
+    color: '#78350f',
+    marginBottom: 4,
+  },
+  pendingBannerHint: {
+    fontSize: 12,
+    color: '#a16207',
     marginTop: 4,
   },
   skillInputRow: {
