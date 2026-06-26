@@ -28,7 +28,9 @@ import {
   formatBookedSlotLabel,
   formatHourLabel,
   getAvailableBookingHours,
+  getDisplayBookingHours,
   getMinimumBookingDate,
+  getPreferredAvailableBookingHour,
   getWorkingHoursLabel,
   isBookingTimeUnavailable,
   isSlotUnavailable,
@@ -174,24 +176,17 @@ const CareReceiverBookingsScreen: React.FC = () => {
       selectedCaregiver?.workStartTime,
       selectedCaregiver?.workEndTime,
     )) {
-      const firstAvailableHour = getAvailableBookingHours(
+      const preferredHour = getPreferredAvailableBookingHour(
+        bookingTime.getHours(),
         durationHours,
+        bookedSlots,
         selectedCaregiver?.workStartTime,
         selectedCaregiver?.workEndTime,
-      ).find(
-        hour =>
-          !isSlotUnavailable(
-            hour * 60,
-            durationHours,
-            bookedSlots,
-            selectedCaregiver?.workStartTime,
-            selectedCaregiver?.workEndTime,
-          ),
       );
 
-      if (firstAvailableHour !== undefined) {
+      if (preferredHour !== undefined && preferredHour !== bookingTime.getHours()) {
         const nextTime = new Date(bookingDate);
-        nextTime.setHours(firstAvailableHour, 0, 0, 0);
+        nextTime.setHours(preferredHour, 0, 0, 0);
         setBookingTime(nextTime);
       }
     }
@@ -202,6 +197,8 @@ const CareReceiverBookingsScreen: React.FC = () => {
     durationHours,
     bookingDate,
     bookingTime,
+    selectedCaregiver?.workStartTime,
+    selectedCaregiver?.workEndTime,
   ]);
 
   const loadProfile = async () => {
@@ -331,9 +328,12 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const handleBookNow = (caregiver: Caregiver) => {
     setSelectedCaregiver(caregiver);
     setShowDatePicker(false);
-    setBookingDate(getMinimumBookingDate());
-    const defaultTime = new Date();
-    defaultTime.setHours(9, 0, 0, 0);
+    const nextDate = getMinimumBookingDate();
+    setBookingDate(nextDate);
+    const firstHour =
+      getAvailableBookingHours(1, caregiver.workStartTime, caregiver.workEndTime)[0] ?? 9;
+    const defaultTime = new Date(nextDate);
+    defaultTime.setHours(firstHour, 0, 0, 0);
     setBookingTime(defaultTime);
     setBookingModalVisible(true);
   };
@@ -367,8 +367,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
   const calculatedAmount = (selectedCaregiver?.hourlyRate || 0) * durationHours;
   const advanceAmount = Number((calculatedAmount * 0.5).toFixed(2));
   const remainingAmount = Number((calculatedAmount - advanceAmount).toFixed(2));
-  const availableBookingHours = getAvailableBookingHours(
-    durationHours,
+  const displayBookingHours = getDisplayBookingHours(
     selectedCaregiver?.workStartTime,
     selectedCaregiver?.workEndTime,
   );
@@ -383,7 +382,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
     selectedCaregiver?.workStartTime,
     selectedCaregiver?.workEndTime,
   );
-  const hasAvailableSlot = availableBookingHours.some(
+  const hasAvailableSlot = displayBookingHours.some(
     hour =>
       !isSlotUnavailable(
         hour * 60,
@@ -1357,16 +1356,26 @@ const CareReceiverBookingsScreen: React.FC = () => {
                       </View>
                     )}
 
+                    {!workingHoursLabel ? (
+                      <View style={styles.noSlotsCard}>
+                        <Text style={styles.noSlotsText}>
+                          This caregiver has not set working hours yet. Standard time slots are
+                          shown until they update their profile.
+                        </Text>
+                      </View>
+                    ) : null}
+
                     {!hasAvailableSlot ? (
                       <View style={styles.noSlotsCard}>
                         <Text style={styles.noSlotsText}>
-                          No available time slots for a {durationHours}-hour booking on this date.
-                          Try another date or shorter duration.
+                          No available time slots for a {durationHours}-hour booking on this date
+                          {workingHoursLabel ? ` within ${workingHoursLabel}` : ''}. Try another
+                          date or shorter duration.
                         </Text>
                       </View>
                     ) : (
                       <View style={styles.timeSlotContainer}>
-                        {availableBookingHours.map(hour => {
+                        {displayBookingHours.map(hour => {
                           const blocked = isSlotUnavailable(
                             hour * 60,
                             durationHours,
@@ -1384,6 +1393,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
                                 styles.timeSlotChip,
                                 blocked && styles.timeSlotChipBlocked,
                                 isSelected && !blocked && styles.timeSlotChipActive,
+                                isSelected && blocked && styles.timeSlotChipSelectedBlocked,
                               ]}
                               disabled={blocked}
                               onPress={() => handleSelectTimeSlot(hour)}>
@@ -1392,6 +1402,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
                                   styles.timeSlotChipText,
                                   blocked && styles.timeSlotChipTextBlocked,
                                   isSelected && !blocked && styles.timeSlotChipTextActive,
+                                  isSelected && blocked && styles.timeSlotChipTextSelectedBlocked,
                                 ]}>
                                 {formatHourLabel(hour)}
                               </Text>
@@ -1403,7 +1414,8 @@ const CareReceiverBookingsScreen: React.FC = () => {
 
                     {hasTimeConflict && hasAvailableSlot && (
                       <Text style={styles.timeConflictText}>
-                        Selected time overlaps with an existing booking. Choose an available slot.
+                        Selected time is unavailable for a {durationHours}-hour booking. Choose
+                        another slot or reduce the duration.
                       </Text>
                     )}
                   </>
@@ -2556,6 +2568,14 @@ const styles = StyleSheet.create({
   },
   timeSlotChipTextBlocked: {
     color: '#9ca3af',
+    textDecorationLine: 'line-through',
+  },
+  timeSlotChipSelectedBlocked: {
+    borderColor: '#dc2626',
+    backgroundColor: '#fef2f2',
+  },
+  timeSlotChipTextSelectedBlocked: {
+    color: '#dc2626',
     textDecorationLine: 'line-through',
   },
   timeConflictText: {

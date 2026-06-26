@@ -79,8 +79,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   const updateUser = (updatedUser: User) => {
-    setUser(updatedUser);
-    AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+    setUser(prev => {
+      const merged = prev ? {...prev, ...updatedUser} : updatedUser;
+      AsyncStorage.setItem('user', JSON.stringify(merged));
+      return merged;
+    });
   };
 
   // Fetches fresh user data from /api/auth/me and updates stored state.

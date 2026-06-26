@@ -14,6 +14,95 @@ export const getMinimumBookingDate = (): Date => {
   return tomorrow;
 };
 
+/** Local calendar date as YYYY-MM-DD (avoids UTC shifts from toISOString). */
+export const formatLocalDateParam = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/** Parse API/storage dates without UTC day shifts. */
+export const parseLocalCalendarDate = (value: string | Date): Date => {
+  if (value instanceof Date) {
+    return new Date(
+      value.getFullYear(),
+      value.getMonth(),
+      value.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+  }
+
+  const dateOnlyMatch = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnlyMatch) {
+    const year = parseInt(dateOnlyMatch[1], 10);
+    const month = parseInt(dateOnlyMatch[2], 10) - 1;
+    const day = parseInt(dateOnlyMatch[3], 10);
+    return new Date(year, month, day, 0, 0, 0, 0);
+  }
+
+  const parsed = new Date(value);
+  return new Date(
+    parsed.getFullYear(),
+    parsed.getMonth(),
+    parsed.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+};
+
+export const isSameCalendarDay = (a: Date, b: Date): boolean =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+export const getBookingEndDateTime = (
+  date: Date,
+  endTime: string,
+  startTime?: string,
+  durationHours?: number,
+): Date => {
+  const calendarDate = parseLocalCalendarDate(date);
+  let endMinutes = parseTimeToMinutes(endTime);
+
+  if (endMinutes === null && startTime) {
+    const startMinutes = parseTimeToMinutes(startTime);
+    if (startMinutes !== null && durationHours && durationHours > 0) {
+      endMinutes = startMinutes + durationHours * 60;
+    }
+  }
+
+  if (endMinutes === null) {
+    const fallback = new Date(calendarDate);
+    fallback.setHours(23, 59, 59, 999);
+    return fallback;
+  }
+
+  const result = new Date(calendarDate);
+  result.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+  return result;
+};
+
+export const isBookingExpired = (
+  date: Date,
+  endTime: string,
+  status: string,
+  startTime?: string,
+  durationHours?: number,
+): boolean => {
+  if (status === 'completed' || status === 'cancelled') {
+    return false;
+  }
+
+  const bookingEnd = getBookingEndDateTime(date, endTime, startTime, durationHours);
+  return Date.now() > bookingEnd.getTime();
+};
+
 export const parseTimeToMinutes = (timeStr: string): number | null => {
   if (!timeStr) {
     return null;
@@ -200,18 +289,82 @@ export const getAvailableBookingHours = (
   const workStart = parseTimeToMinutes(workStartTime || '');
   const workEnd = parseTimeToMinutes(workEndTime || '');
 
-  return BOOKING_START_HOURS.filter(hour => {
-    const startMinutes = hour * 60;
-    const endMinutes = startMinutes + durationHours * 60;
+  if (workStart !== null && workEnd !== null && workEnd > workStart) {
+    const hours: number[] = [];
 
-    if (workStart !== null && workEnd !== null && workEnd > workStart) {
-      if (startMinutes < workStart || endMinutes > workEnd) {
-        return false;
+    for (let hour = 0; hour < 24; hour += 1) {
+      const startMinutes = hour * 60;
+      const endMinutes = startMinutes + durationHours * 60;
+
+      if (startMinutes >= workStart && endMinutes <= workEnd) {
+        hours.push(hour);
       }
     }
 
-    return true;
+    return hours;
+  }
+
+  return BOOKING_START_HOURS.filter(hour => {
+    const endMinutes = hour * 60 + durationHours * 60;
+    return endMinutes <= 24 * 60;
   });
+};
+
+/** Hourly start times that fit at least a 1-hour booking within work hours. */
+export const getDisplayBookingHours = (
+  workStartTime?: string,
+  workEndTime?: string,
+): number[] => getAvailableBookingHours(1, workStartTime, workEndTime);
+
+export const getFirstAvailableBookingHour = (
+  durationHours: number,
+  bookedSlots: BookedSlot[],
+  workStartTime?: string,
+  workEndTime?: string,
+): number | undefined =>
+  getAvailableBookingHours(durationHours, workStartTime, workEndTime).find(
+    hour =>
+      !isSlotUnavailable(
+        hour * 60,
+        durationHours,
+        bookedSlots,
+        workStartTime,
+        workEndTime,
+      ),
+  );
+
+export const getPreferredAvailableBookingHour = (
+  preferredHour: number,
+  durationHours: number,
+  bookedSlots: BookedSlot[],
+  workStartTime?: string,
+  workEndTime?: string,
+): number | undefined => {
+  const availableHours = getAvailableBookingHours(
+    durationHours,
+    workStartTime,
+    workEndTime,
+  ).filter(
+    hour =>
+      !isSlotUnavailable(
+        hour * 60,
+        durationHours,
+        bookedSlots,
+        workStartTime,
+        workEndTime,
+      ),
+  );
+
+  if (availableHours.length === 0) {
+    return undefined;
+  }
+
+  const atOrBeforePreferred = availableHours.filter(hour => hour <= preferredHour);
+  if (atOrBeforePreferred.length > 0) {
+    return atOrBeforePreferred[atOrBeforePreferred.length - 1];
+  }
+
+  return availableHours[0];
 };
 
 export const isSlotUnavailable = (

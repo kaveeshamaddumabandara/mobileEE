@@ -12,12 +12,20 @@ export interface User {
   profileImage?: string;
 }
 
+export interface PendingContactChange {
+  _id?: string;
+  pendingPhone?: string;
+  pendingAddressLabel?: string;
+  submittedAt?: string;
+}
+
 export interface Caregiver extends User {
   role: 'caregiver';
   experience?: number;
   skills?: string[];
   availability?: boolean;
   rating?: number;
+  totalReviews?: number;
   hourlyRate?: number;
   bio?: string;
   profileImage?: string;
@@ -30,6 +38,8 @@ export interface Caregiver extends User {
   travelRadius?: string;
   workStartTime?: string;
   workEndTime?: string;
+  pendingContactChange?: PendingContactChange | null;
+  contactChangeSubmitted?: boolean;
 }
 
 export interface CareReceiver extends User {
@@ -78,8 +88,6 @@ export interface RegisterData {
   hourlyRate?: number;
   bio?: string;
   languages?: string[];
-  workStartTime?: string;
-  workEndTime?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
