@@ -16,7 +16,6 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {AuthStackParamList} from '../../navigation/types';
 import Icon from 'react-native-vector-icons/Feather';
 import {launchImageLibrary} from 'react-native-image-picker';
-import {pick, types as DocTypes, errorCodes, isErrorWithCode, keepLocalCopy} from '@react-native-documents/picker';
 import ApiService from '../../services/api';
 import {useAuth} from '../../context/AuthContext';
 
@@ -209,9 +208,15 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
   };
 
   const pickPdfs = async () => {
+    let documentPicker:
+      | typeof import('@react-native-documents/picker')
+      | null = null;
+
     try {
-      const results = await pick({
-        type: [DocTypes.pdf],
+      documentPicker = await import('@react-native-documents/picker');
+
+      const results = await documentPicker.pick({
+        type: [documentPicker.types.pdf],
         allowMultiSelection: true,
       });
 
@@ -232,7 +237,7 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         return;
       }
 
-      const copies = await keepLocalCopy({
+      const copies = await documentPicker.keepLocalCopy({
         files: [firstFile, ...restFiles],
         destination: 'cachesDirectory',
       });
@@ -248,11 +253,20 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
         proofDocuments: [...prev.proofDocuments, ...picked],
       }));
     } catch (err) {
-      if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
+      if (
+        documentPicker &&
+        documentPicker.isErrorWithCode(err) &&
+        err.code === documentPicker.errorCodes.OPERATION_CANCELED
+      ) {
         return;
       }
+
+      const message =
+        err instanceof Error && err.message.includes('RNDocumentPicker')
+          ? 'PDF picker is not available in this build. Rebuild the app after running pod install in the ios folder.'
+          : 'Failed to pick PDF. Please try again.';
       console.error('PDF pick error:', err);
-      Alert.alert('Error', 'Failed to pick PDF. Please try again.');
+      Alert.alert('Error', message);
     }
   };
 
