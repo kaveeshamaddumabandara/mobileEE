@@ -16,7 +16,7 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {AuthStackParamList} from '../../navigation/types';
 import Icon from 'react-native-vector-icons/Feather';
 import {launchImageLibrary} from 'react-native-image-picker';
-import DocumentPicker, {types as DocTypes} from 'react-native-document-picker';
+import {pick, types as DocTypes, errorCodes, isErrorWithCode, keepLocalCopy} from '@react-native-documents/picker';
 import ApiService from '../../services/api';
 import {useAuth} from '../../context/AuthContext';
 
@@ -210,31 +210,45 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
 
   const pickPdfs = async () => {
     try {
-      const results = await DocumentPicker.pick({
+      const results = await pick({
         type: [DocTypes.pdf],
         allowMultiSelection: true,
-        copyTo: 'cachesDirectory',
       });
-      const picked = results.map(file => {
-        const name = file.name || `document_${Date.now()}.pdf`;
-        const normalizedName = name.toLowerCase().endsWith('.pdf')
-          ? name
-          : `${name}.pdf`;
 
+      if (results.length === 0) {
+        return;
+      }
+
+      const filesToCopy = results.map(file => {
+        const name = file.name || `document_${Date.now()}.pdf`;
         return {
-          uri: file.fileCopyUri || file.uri,
-          name: normalizedName,
-          type: file.type || 'application/pdf',
+          uri: file.uri,
+          fileName: name.toLowerCase().endsWith('.pdf') ? name : `${name}.pdf`,
         };
       });
-      if (picked.length > 0) {
-        setFormData(prev => ({
-          ...prev,
-          proofDocuments: [...prev.proofDocuments, ...picked],
-        }));
+
+      const [firstFile, ...restFiles] = filesToCopy;
+      if (!firstFile) {
+        return;
       }
+
+      const copies = await keepLocalCopy({
+        files: [firstFile, ...restFiles],
+        destination: 'cachesDirectory',
+      });
+
+      const picked = copies.map((copy, index) => ({
+        uri: copy.status === 'success' ? copy.localUri : filesToCopy[index].uri,
+        name: filesToCopy[index].fileName,
+        type: 'application/pdf',
+      }));
+
+      setFormData(prev => ({
+        ...prev,
+        proofDocuments: [...prev.proofDocuments, ...picked],
+      }));
     } catch (err) {
-      if (DocumentPicker.isCancel(err)) {
+      if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
         return;
       }
       console.error('PDF pick error:', err);
