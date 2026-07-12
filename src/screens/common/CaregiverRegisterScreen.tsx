@@ -16,7 +16,6 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {AuthStackParamList} from '../../navigation/types';
 import Icon from 'react-native-vector-icons/Feather';
 import {launchImageLibrary} from 'react-native-image-picker';
-import DocumentPicker, {types as DocTypes} from 'react-native-document-picker';
 import ApiService from '../../services/api';
 import {useAuth} from '../../context/AuthContext';
 
@@ -209,36 +208,65 @@ const CaregiverRegisterScreen: React.FC<CaregiverRegisterScreenProps> = ({
   };
 
   const pickPdfs = async () => {
-    try {
-      const results = await DocumentPicker.pick({
-        type: [DocTypes.pdf],
-        allowMultiSelection: true,
-        copyTo: 'cachesDirectory',
-      });
-      const picked = results.map(file => {
-        const name = file.name || `document_${Date.now()}.pdf`;
-        const normalizedName = name.toLowerCase().endsWith('.pdf')
-          ? name
-          : `${name}.pdf`;
+    let documentPicker:
+      | typeof import('@react-native-documents/picker')
+      | null = null;
 
-        return {
-          uri: file.fileCopyUri || file.uri,
-          name: normalizedName,
-          type: file.type || 'application/pdf',
-        };
+    try {
+      documentPicker = await import('@react-native-documents/picker');
+
+      const results = await documentPicker.pick({
+        type: [documentPicker.types.pdf],
+        allowMultiSelection: true,
       });
-      if (picked.length > 0) {
-        setFormData(prev => ({
-          ...prev,
-          proofDocuments: [...prev.proofDocuments, ...picked],
-        }));
-      }
-    } catch (err) {
-      if (DocumentPicker.isCancel(err)) {
+
+      if (results.length === 0) {
         return;
       }
+
+      const filesToCopy = results.map(file => {
+        const name = file.name || `document_${Date.now()}.pdf`;
+        return {
+          uri: file.uri,
+          fileName: name.toLowerCase().endsWith('.pdf') ? name : `${name}.pdf`,
+        };
+      });
+
+      const [firstFile, ...restFiles] = filesToCopy;
+      if (!firstFile) {
+        return;
+      }
+
+      const copies = await documentPicker.keepLocalCopy({
+        files: [firstFile, ...restFiles],
+        destination: 'cachesDirectory',
+      });
+
+      const picked = copies.map((copy, index) => ({
+        uri: copy.status === 'success' ? copy.localUri : filesToCopy[index].uri,
+        name: filesToCopy[index].fileName,
+        type: 'application/pdf',
+      }));
+
+      setFormData(prev => ({
+        ...prev,
+        proofDocuments: [...prev.proofDocuments, ...picked],
+      }));
+    } catch (err) {
+      if (
+        documentPicker &&
+        documentPicker.isErrorWithCode(err) &&
+        err.code === documentPicker.errorCodes.OPERATION_CANCELED
+      ) {
+        return;
+      }
+
+      const message =
+        err instanceof Error && err.message.includes('RNDocumentPicker')
+          ? 'PDF picker is not available in this build. Rebuild the app after running pod install in the ios folder.'
+          : 'Failed to pick PDF. Please try again.';
       console.error('PDF pick error:', err);
-      Alert.alert('Error', 'Failed to pick PDF. Please try again.');
+      Alert.alert('Error', message);
     }
   };
 
