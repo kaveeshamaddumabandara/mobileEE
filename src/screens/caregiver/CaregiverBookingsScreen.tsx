@@ -108,13 +108,12 @@ const CaregiverBookingsScreen: React.FC = () => {
   const navigation = useNavigation<CaregiverBookingsNavigationProp>();
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'expired' | 'completed'>('upcoming');
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
   
   // Bookings state
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
-  const [expiredBookings, setExpiredBookings] = useState<Booking[]>([]);
   const [completedBookings, setCompletedBookings] = useState<Booking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   
@@ -232,12 +231,6 @@ const CaregiverBookingsScreen: React.FC = () => {
       
       const activeStatuses = ['confirmed', 'pending'];
 
-      const expired = transformedBookings
-        .filter(
-          b => activeStatuses.includes(b.status) && isActiveBookingExpired(b),
-        )
-        .sort((a, b) => b.date.getTime() - a.date.getTime());
-
       const upcoming = transformedBookings
         .filter(
           b => activeStatuses.includes(b.status) && !isActiveBookingExpired(b),
@@ -249,14 +242,11 @@ const CaregiverBookingsScreen: React.FC = () => {
       ).sort((a, b) => b.date.getTime() - a.date.getTime());
       
       setUpcomingBookings(upcoming);
-      setExpiredBookings(expired);
       setCompletedBookings(completed);
       
       console.log(
         '✅ Loaded bookings - Upcoming:',
         upcoming.length,
-        'Expired:',
-        expired.length,
         'Completed:',
         completed.length,
       );
@@ -474,9 +464,6 @@ const CaregiverBookingsScreen: React.FC = () => {
     hasUpcoming: upcomingBookings.some(booking =>
       isSameCalendarDay(booking.date, date),
     ),
-    hasExpired: expiredBookings.some(booking =>
-      isSameCalendarDay(booking.date, date),
-    ),
     hasCompleted: completedBookings.some(booking =>
       isSameCalendarDay(booking.date, date),
     ),
@@ -496,7 +483,6 @@ const CaregiverBookingsScreen: React.FC = () => {
   };
 
   const displayedUpcomingBookings = filterBookingsBySelectedDate(upcomingBookings);
-  const displayedExpiredBookings = filterBookingsBySelectedDate(expiredBookings);
   const displayedCompletedBookings = filterBookingsBySelectedDate(completedBookings);
 
   const renderCalendar = () => {
@@ -519,10 +505,10 @@ const CaregiverBookingsScreen: React.FC = () => {
       const isToday = isSameCalendarDay(date, today);
       const isSelected =
         selectedCalendarDate !== null && isSameCalendarDay(date, selectedCalendarDate);
-      const {hasUpcoming, hasExpired, hasCompleted, hasPendingRequest} =
+      const {hasUpcoming, hasCompleted, hasPendingRequest} =
         getDayBookingMarkers(date);
       const hasAnyBooking =
-        hasUpcoming || hasExpired || hasCompleted || hasPendingRequest;
+        hasUpcoming || hasCompleted || hasPendingRequest;
 
       days.push(
         <TouchableOpacity
@@ -550,7 +536,6 @@ const CaregiverBookingsScreen: React.FC = () => {
               <View style={styles.bookingDotsRow}>
                 {hasPendingRequest && <View style={styles.pendingDot} />}
                 {hasUpcoming && <View style={styles.bookingDot} />}
-                {hasExpired && <View style={styles.expiredDot} />}
                 {hasCompleted && <View style={styles.completedDot} />}
               </View>
             )}
@@ -810,10 +795,6 @@ const CaregiverBookingsScreen: React.FC = () => {
               <Text style={styles.legendText}>Upcoming</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={styles.legendDotRed} />
-              <Text style={styles.legendText}>Expired</Text>
-            </View>
-            <View style={styles.legendItem}>
               <View style={styles.legendDotGreen} />
               <Text style={styles.legendText}>Completed</Text>
             </View>
@@ -969,14 +950,6 @@ const CaregiverBookingsScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'expired' && styles.activeTab]}
-            onPress={() => setActiveTab('expired')}>
-            <Icon name="alert-circle" size={14} color={activeTab === 'expired' ? '#8b5cf6' : '#6b7280'} />
-            <Text style={[styles.tabText, activeTab === 'expired' && styles.activeTabText]}>
-              Expired ({expiredBookings.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
             onPress={() => setActiveTab('completed')}>
             <Icon name="check-circle" size={14} color={activeTab === 'completed' ? '#8b5cf6' : '#6b7280'} />
@@ -1006,24 +979,6 @@ const CaregiverBookingsScreen: React.FC = () => {
                   {selectedCalendarDate
                     ? 'Try another date or clear the calendar filter'
                     : "You don't have any scheduled appointments"}
-                </Text>
-              </View>
-            )
-          ) : activeTab === 'expired' ? (
-            displayedExpiredBookings.length > 0 ? (
-              displayedExpiredBookings.map(booking =>
-                renderBookingCard(booking, {expired: true}),
-              )
-            ) : (
-              <View style={styles.emptyState}>
-                <Icon name="alert-circle" size={64} color="#d1d5db" />
-                <Text style={styles.emptyStateTitle}>
-                  {selectedCalendarDate ? 'No Expired Bookings on This Date' : 'No Expired Bookings'}
-                </Text>
-                <Text style={styles.emptyStateText}>
-                  {selectedCalendarDate
-                    ? 'Try another date or clear the calendar filter'
-                    : 'Overdue bookings that were not completed will appear here'}
                 </Text>
               </View>
             )

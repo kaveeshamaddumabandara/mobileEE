@@ -546,12 +546,38 @@ class ApiService {
     hourlyRate: number;
     totalAmount?: number;
     paymentIntentId: string;
+    bookingRequestId?: string;
   }): Promise<any> {
     const response = await this.api.post('/carereceiver/bookings', {
       ...bookingData,
       date: formatLocalDateParam(bookingData.date),
     });
     return response.data;
+  }
+
+  // Send a booking request to a caregiver (care receiver, no upfront payment)
+  async createBookingRequest(requestData: {
+    caregiverId: string;
+    serviceType: string;
+    requestedDate: Date;
+    startTime: string;
+    endTime: string;
+    duration?: number;
+    location: string;
+    specialNeeds?: string;
+    hourlyRate: number;
+  }): Promise<any> {
+    const response = await this.api.post('/carereceiver/booking-request', {
+      ...requestData,
+      requestedDate: formatLocalDateParam(requestData.requestedDate),
+    });
+    return response.data;
+  }
+
+  // Get the care receiver's own booking requests (pending/approved/rejected)
+  async getMyBookingRequests(): Promise<any[]> {
+    const response = await this.api.get('/carereceiver/my-booking-requests');
+    return response.data.data;
   }
 
   // Get all bookings for care receiver

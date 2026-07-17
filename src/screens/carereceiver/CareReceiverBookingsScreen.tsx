@@ -62,6 +62,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
   // Bookings state
   const [myBookings, setMyBookings] = useState<any[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
+  const [myBookingRequests, setMyBookingRequests] = useState<any[]>([]);
   
   // User-entered care requirements
   const [medicalConditions, setMedicalConditions] = useState('');
@@ -140,6 +141,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'bookings') {
       loadMyBookings();
+      loadMyBookingRequests();
     }
   }, [activeTab]);
 
@@ -248,6 +250,15 @@ const CareReceiverBookingsScreen: React.FC = () => {
       Alert.alert('Error', error.response?.data?.message || 'Failed to load bookings');
     } finally {
       setLoadingBookings(false);
+    }
+  };
+
+  const loadMyBookingRequests = async () => {
+    try {
+      const requests = await ApiService.getMyBookingRequests();
+      setMyBookingRequests(Array.isArray(requests) ? requests : []);
+    } catch (error: any) {
+      console.error('Error loading booking requests:', error);
     }
   };
 
@@ -425,36 +436,21 @@ const CareReceiverBookingsScreen: React.FC = () => {
       return;
     }
 
-    const bookingData = {
-      caregiverId: selectedCaregiver?._id,
-      caregiverName: selectedCaregiver?.name,
-      date: bookingDate.toISOString(),
-      time: bookingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      durationHours,
-      totalAmount: calculatedAmount,
-      location: bookingLocation,
-      serviceType: getBookingServiceType(serviceType),
-      notes: bookingNotes,
-      hourlyRate,
-    };
-
-    console.log('Booking Data:', bookingData);
-    
-      Alert.alert(
-      'Pay 50% to Confirm Booking',
-      `Do you want to book ${selectedCaregiver?.name} for ${serviceType} on ${bookingDate.toLocaleDateString()} at ${bookingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} for ${durationHours} hour${durationHours > 1 ? 's' : ''}?\n\nTotal: Rs.${calculatedAmount}\nPay now (50% online): Rs.${advanceAmount}\nPay later (physical): Rs.${remainingAmount}`,
+    Alert.alert(
+      'Send Booking Request',
+      `Send a booking request to ${selectedCaregiver?.name} for ${serviceType} on ${bookingDate.toLocaleDateString()} at ${bookingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} for ${durationHours} hour${durationHours > 1 ? 's' : ''}?\n\nTotal: Rs.${calculatedAmount}\n\nYou'll pay the 50% advance (Rs.${advanceAmount}) only after the caregiver approves your request.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Pay Now',
+          text: 'Send Request',
           onPress: async () => {
             try {
               setSubmittingBooking(true);
 
-              const bookingPayload = {
+              await ApiService.createBookingRequest({
                 caregiverId: selectedCaregiver._id,
                 serviceType: getBookingServiceType(serviceType),
-                date: bookingDate,
+                requestedDate: bookingDate,
                 startTime: bookingTime.toLocaleTimeString('en-US', {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -463,57 +459,23 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 endTime: buildEndTime(bookingTime),
                 duration: durationHours,
                 location: bookingLocation.trim(),
-                needs: bookingNotes.trim(),
+                specialNeeds: bookingNotes.trim(),
                 hourlyRate,
-              };
-
-              const paymentIntent = await ApiService.createBookingPaymentIntent(bookingPayload);
-
-              const initResult = await initPaymentSheet({
-                merchantDisplayName: 'CareConnect',
-                paymentIntentClientSecret: paymentIntent.clientSecret,
-                allowsDelayedPaymentMethods: false,
-                defaultBillingDetails: {
-                  name: careReceiverProfile?.name || 'Care Receiver',
-                  email: careReceiverProfile?.email,
-                  phone: careReceiverProfile?.phone,
-                },
-              });
-
-              if (initResult.error) {
-                throw new Error(initResult.error.message);
-              }
-
-              const paymentResult = await presentPaymentSheet();
-
-              if (paymentResult.error) {
-                if (paymentResult.error.code === 'Canceled') {
-                  Alert.alert('Payment Cancelled', 'Booking was not created because payment was cancelled.');
-                  return;
-                }
-                throw new Error(paymentResult.error.message);
-              }
-
-              await ApiService.createBooking({
-                ...bookingPayload,
-                totalAmount: paymentIntent.totalAmount,
-                paymentIntentId: paymentIntent.paymentIntentId,
               });
 
               closeBookingModal();
               resetBookingForm();
               Alert.alert(
-                'Success',
-                `Booking request submitted successfully!\n\nPaid online: Rs.${paymentIntent.advanceAmount}\nRemaining (physical): Rs.${paymentIntent.remainingAmount}`,
+                'Request Sent',
+                'Your booking request has been sent. You will be able to pay the advance and confirm once the caregiver approves it.',
               );
-              if (activeTab === 'bookings') {
-                await loadMyBookings();
-              }
+              setActiveTab('bookings');
+              await loadMyBookingRequests();
             } catch (error: any) {
-              console.error('Booking submission failed:', error);
+              console.error('Booking request failed:', error);
               Alert.alert(
-                'Booking Failed',
-                error?.response?.data?.message || 'Unable to submit booking request. Please try again.',
+                'Request Failed',
+                error?.response?.data?.message || 'Unable to send booking request. Please try again.',
               );
             } finally {
               setSubmittingBooking(false);
@@ -522,6 +484,77 @@ const CareReceiverBookingsScreen: React.FC = () => {
         },
       ]
     );
+  };
+
+  const handlePayAndConfirmRequest = async (request: any) => {
+    if (submittingBooking) {
+      return;
+    }
+
+    try {
+      setSubmittingBooking(true);
+
+      const bookingPayload = {
+        caregiverId: request.caregiverId?._id || request.caregiverId,
+        serviceType: request.serviceType,
+        date: new Date(request.requestedDate),
+        startTime: request.startTime,
+        endTime: request.endTime,
+        duration: Number(request.duration) > 0 ? Number(request.duration) : 1,
+        location: request.location,
+        needs: request.specialNeeds || '',
+        hourlyRate: request.hourlyRate,
+      };
+
+      const paymentIntent = await ApiService.createBookingPaymentIntent(bookingPayload);
+
+      const initResult = await initPaymentSheet({
+        merchantDisplayName: 'CareConnect',
+        paymentIntentClientSecret: paymentIntent.clientSecret,
+        allowsDelayedPaymentMethods: false,
+        defaultBillingDetails: {
+          name: careReceiverProfile?.name || 'Care Receiver',
+          email: careReceiverProfile?.email,
+          phone: careReceiverProfile?.phone,
+        },
+      });
+
+      if (initResult.error) {
+        throw new Error(initResult.error.message);
+      }
+
+      const paymentResult = await presentPaymentSheet();
+
+      if (paymentResult.error) {
+        if (paymentResult.error.code === 'Canceled') {
+          Alert.alert('Payment Cancelled', 'Your booking was not confirmed because payment was cancelled.');
+          return;
+        }
+        throw new Error(paymentResult.error.message);
+      }
+
+      await ApiService.createBooking({
+        ...bookingPayload,
+        totalAmount: paymentIntent.totalAmount,
+        paymentIntentId: paymentIntent.paymentIntentId,
+        bookingRequestId: request._id,
+      });
+
+      Alert.alert(
+        'Booking Confirmed',
+        `Your booking is confirmed!\n\nPaid online: Rs.${paymentIntent.advanceAmount}\nRemaining (physical): Rs.${paymentIntent.remainingAmount}`,
+      );
+
+      await Promise.all([loadMyBookingRequests(), loadMyBookings()]);
+    } catch (error: any) {
+      console.error('Pay & confirm failed:', error);
+      Alert.alert(
+        'Payment Failed',
+        error?.response?.data?.message || 'Unable to confirm your booking. Please try again.',
+      );
+    } finally {
+      setSubmittingBooking(false);
+    }
   };
 
   const resetBookingForm = () => {
@@ -1102,10 +1135,107 @@ const CareReceiverBookingsScreen: React.FC = () => {
           refreshControl={
             <RefreshControl
               refreshing={loadingBookings}
-              onRefresh={loadMyBookings}
+              onRefresh={() => {
+                loadMyBookings();
+                loadMyBookingRequests();
+              }}
               colors={['#2563eb']}
             />
           }>
+          {myBookingRequests.length > 0 && (
+            <View style={styles.requestsSection}>
+              <Text style={styles.requestsSectionTitle}>Booking Requests</Text>
+              {myBookingRequests.map((request: any) => {
+                const requestDate = new Date(request.requestedDate);
+                const advance = Number(((request.totalAmount || 0) * 0.5).toFixed(2));
+                return (
+                  <View key={request._id} style={styles.bookingCard}>
+                    <View style={styles.bookingHeader}>
+                      <View style={styles.dateBox}>
+                        <Text style={styles.dateMonth}>
+                          {requestDate.toLocaleDateString('default', {month: 'short'}).toUpperCase()}
+                        </Text>
+                        <Text style={styles.dateDay}>{requestDate.getDate()}</Text>
+                      </View>
+                      <View style={styles.bookingInfo}>
+                        <Text style={styles.bookingCaregiverName}>
+                          {request.caregiverId?.name || 'Caregiver'}
+                        </Text>
+                        <Text style={styles.serviceType}>{request.serviceType}</Text>
+                        <View style={styles.timeRow}>
+                          <Icon name="clock" size={14} color="#6b7280" />
+                          <Text style={styles.timeText}>
+                            {request.startTime} - {request.endTime}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              request.status === 'approved' && styles.confirmedBadge,
+                              request.status === 'pending' && styles.pendingBadge,
+                              request.status === 'rejected' && styles.cancelledBadge,
+                            ]}>
+                            <Text
+                              style={[
+                                styles.statusText,
+                                request.status === 'approved' && styles.confirmedText,
+                                request.status === 'pending' && styles.pendingText,
+                                request.status === 'rejected' && styles.cancelledText,
+                              ]}>
+                              {request.status === 'approved'
+                                ? 'approved'
+                                : request.status === 'rejected'
+                                ? 'declined'
+                                : 'pending'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.locationRow}>
+                      <Icon name="map-pin" size={14} color="#6b7280" />
+                      <Text style={styles.locationText}>{request.location}</Text>
+                    </View>
+
+                    {request.status === 'pending' && (
+                      <View style={styles.requestNoteRow}>
+                        <Icon name="clock" size={14} color="#92400e" />
+                        <Text style={styles.requestNoteText}>
+                          Waiting for the caregiver to approve your request.
+                        </Text>
+                      </View>
+                    )}
+
+                    {request.status === 'rejected' && (
+                      <View style={styles.requestRejectedRow}>
+                        <Icon name="x-circle" size={14} color="#b91c1c" />
+                        <Text style={styles.requestRejectedText}>
+                          Declined{request.rejectionReason ? `: ${request.rejectionReason}` : ''}
+                        </Text>
+                      </View>
+                    )}
+
+                    {request.status === 'approved' && (
+                      <TouchableOpacity
+                        style={styles.payConfirmButton}
+                        disabled={submittingBooking}
+                        onPress={() => handlePayAndConfirmRequest(request)}>
+                        {submittingBooking ? (
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                          <>
+                            <Icon name="credit-card" size={16} color="#ffffff" />
+                            <Text style={styles.payConfirmButtonText}>
+                              Pay 50% (Rs.{advance.toLocaleString()}) & Confirm
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
           {loadingBookings ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#2563eb" />
@@ -1208,7 +1338,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 </View>
               ))}
             </View>
-          ) : (
+          ) : myBookingRequests.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Icon name="calendar" size={64} color="#d1d5db" />
               <Text style={styles.emptyTitle}>No Bookings Yet</Text>
@@ -1216,7 +1346,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 You haven't made any bookings yet. Find a caregiver and book their services.
               </Text>
             </View>
-          )}
+          ) : null}
         </ScrollView>
       )}
 
@@ -1448,8 +1578,8 @@ const CareReceiverBookingsScreen: React.FC = () => {
                     <Text style={styles.amountSummaryText}>
                       Rs.{selectedCaregiver?.hourlyRate || 0}/hour x {durationHours}h
                     </Text>
-                    <Text style={styles.onlinePaymentText}>Pay now (50% online): Rs.{advanceAmount}</Text>
-                    <Text style={styles.physicalPaymentText}>Pay later (physical): Rs.{remainingAmount}</Text>
+                    <Text style={styles.onlinePaymentText}>Advance after approval (50% online): Rs.{advanceAmount}</Text>
+                    <Text style={styles.physicalPaymentText}>Remaining (physical): Rs.{remainingAmount}</Text>
                   </View>
                   <Text style={styles.amountSummaryValue}>Rs.{calculatedAmount}</Text>
                 </View>
@@ -1500,7 +1630,7 @@ const CareReceiverBookingsScreen: React.FC = () => {
                 {submittingBooking ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.confirmButtonText}>Pay 50% & Submit</Text>
+                  <Text style={styles.confirmButtonText}>Send Booking Request</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -2714,6 +2844,59 @@ const styles = StyleSheet.create({
   bookingsList: {
     padding: 16,
     gap: 12,
+  },
+  requestsSection: {
+    padding: 16,
+    paddingBottom: 0,
+    gap: 12,
+  },
+  requestsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  requestNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#fffbeb',
+  },
+  requestNoteText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400e',
+  },
+  requestRejectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+  },
+  requestRejectedText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#b91c1c',
+  },
+  payConfirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#2563eb',
+  },
+  payConfirmButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   bookingCard: {
     backgroundColor: '#fff',
